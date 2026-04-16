@@ -33,12 +33,23 @@ def scrape_hero_section(url: str):
         response.raise_for_status()
         soup=BeautifulSoup(response.text,'html.parser')
         
-        h1=soup.find('h1')
-        headline=h1.get_text(strip=True) if h1 else 'No headline found'
+        # Extract Headline (h1)
+        h1 = soup.find('h1')
+        headline = h1.get_text(strip=True) if h1 else 'No headline found'
+        
+        # Extract Sub-headline (usually the first paragraph after h1, or an h2)
+        sub_tag = soup.find(['h2', 'p'])
+        sub_headline = sub_tag.get_text(strip=True) if sub_tag else 'No sub-headline found'
+        
+        # Extract CTA Button (usually an 'a' or 'button' tag)
+        cta_tag = soup.find(['a', 'button'])
+        cta_text = cta_tag.get_text(strip=True) if cta_tag else 'No CTA found'
+
         return {
             "status": "success",
             "headline": headline,
-            "raw_html": str(h1) if h1 else 'No H1 tag found'
+            "sub_headline": sub_headline,
+            "cta_text": cta_text
         }
     except Exception as e:
         return {
@@ -53,7 +64,11 @@ def personalize_landing_page(request: PersonalizeRequest):
     if scraped_data["status"] == "error":
         return {"error": "Could not scrape the landing page"}
     
-    original_headline = scraped_data["headline"]
+    original_hero = {
+        "headline": scraped_data["headline"],
+        "sub_headline": scraped_data["sub_headline"],
+        "cta_text": scraped_data["cta_text"]
+    }
     
     # Step B: Draft the complex instructions for the AI
     system_prompt = """
@@ -62,10 +77,28 @@ def personalize_landing_page(request: PersonalizeRequest):
     Your JSON must have EXACTLY this structure:
     {
       "ad_brief": {
-        "detected_offer": "Summarize the discount or value prop in the image (e.g. 50% Off)",
-        "tone": "What is the vibe? (e.g. Urgent, Fun, Professional)"
+        "detected_offer": "Summarize the discount or value prop",
+        "tone": "What is the vibe?",
+        "audience": "Inferred target audience based on the ad"
       },
-      "new_headline": "Your generated headline here"
+      "scores": {
+        "original_relevance": 25,
+        "new_relevance": 95
+      },
+      "new_hero": {
+        "headline": "Generated headline",
+        "sub_headline": "Generated sub-headline",
+        "cta_text": "Generated CTA text"
+      },
+      "changelog": [
+        {
+          "element": "Headline",
+          "cro_principle": "e.g. Message Match",
+          "reasoning": "Plain English explanation of why you made this change",
+          "confidence": "High / Medium / Low",
+          "confidence_reason": "One-line reason for confidence"
+        }
+      ]
     }
     """
     
@@ -102,7 +135,7 @@ def personalize_landing_page(request: PersonalizeRequest):
                         {"role": "system", "content": system_prompt},
                         {
                             "role": "user", 
-                            "content": f"The original landing page headline is: '{original_headline}'. The user's ad image URL is: {request.ad_url}. Since you are a text model, infer the ad's vibe and offer from the URL name if possible. Provide the JSON analysis."
+                            "content": f"The original landing page elements are: {original_hero}. The user's ad image URL is: {request.ad_url}. Text model, infer the ad's vibe/offer/audience from the URL string. Rewrite ALL THREE hero elements (headline, sub-headline, cta_text) to match this ad. Provide the structured JSON output."
                         }
                     ]
                 }
@@ -112,27 +145,32 @@ def personalize_landing_page(request: PersonalizeRequest):
             data = response.json()
             raw_ai_text = data["choices"][0]["message"]["content"]
             
-            # If we successfully get text here, break out of the loop and stop trying others
-            break
+            import json
+            try:
+                # Clean up the output in case it wrapped it in markdown
+                if raw_ai_text.startswith("```json"):
+                    raw_ai_text = raw_ai_text.replace("```json", "", 1)
+                
+                if raw_ai_text.endswith("```"):
+                     # Remove the ending markdown block securely
+                     raw_ai_text = raw_ai_text[:raw_ai_text.rfind("```")].strip()
+                     
+                ai_result = json.loads(raw_ai_text.strip())
+                # If we parsed it successfully, we break the model retry loop!
+                break
+                
+            except json.JSONDecodeError:
+                print(f"Model {model_name} returned invalid JSON. Skipping...")
+                ai_result = {"error": "AI refused structured JSON", "raw_output": raw_ai_text}
+                continue # Try the next model
             
         except Exception as e:
-            # If this model failed, just print to our local terminal and let the loop continue
+            # If this model failed or threw 429, just print and let the loop continue
             print(f"Model {model_name} failed. Trying the next one...")
             continue
             
-    # Did we get an answer from ANY model?
-    if raw_ai_text:
-        import json
-        try:
-            # Clean up the output in case it wrapped it in markdown
-            if raw_ai_text.startswith("```json"):
-                raw_ai_text = raw_ai_text.replace("```json", "").replace("```", "").strip()
-            ai_result = json.loads(raw_ai_text)
-        except json.JSONDecodeError:
-            ai_result = {"error": "AI refused structured JSON", "raw_output": raw_ai_text}
-        
     return {
         "status": "success",
-        "original_headline": original_headline,
+        "original_hero": original_hero,
         "ai_analysis": ai_result
     }
