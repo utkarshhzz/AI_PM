@@ -38,7 +38,8 @@ export default function Home() {
     setResponse(null);
 
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "https://ai-pm-q8uz.onrender.com/api/personalize";
+      // Force hardcoded production URL to ignore any broken Vercel environment variables 
+      const apiUrl = "https://ai-pm-q8uz.onrender.com/api/personalize";
       const res = await fetch(apiUrl, {
         method: "POST",
         headers: {
@@ -229,7 +230,7 @@ export default function Home() {
         )}
 
         {/* Display Error UI */}
-        {response && (response.status === "error" || response.ai_analysis?.error) && (
+        {response && (response.status === "error" || response.ai_analysis?.error || response.error) && (
           <div className="mt-8 p-4 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
             <p className="font-bold text-red-800 dark:text-red-400">⚠️ Error</p>
             <p className="text-red-700 dark:text-red-300 mt-1">{response.error || response.ai_analysis?.error}</p>
