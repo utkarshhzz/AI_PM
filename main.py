@@ -14,7 +14,10 @@ app = FastAPI()
 # 1. Configure the "Bouncer" (CORS)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"], # Allow our Next.js frontend!
+    allow_origins=[
+        "http://localhost:3000",
+        "https://ai-pm-jet.vercel.app"
+    ], # Allow local and Vercel frontend
     allow_credentials=True,
     allow_methods=["*"], # Allow all types of requests (GET, POST, etc.)
     allow_headers=["*"],
@@ -103,42 +106,66 @@ def personalize_landing_page(request: PersonalizeRequest):
     """
     
     models_to_try = [
-        "google/gemma-7b-it:free",
-        "meta-llama/llama-3-8b-instruct:free",
-        "mistralai/mistral-7b-instruct:free",
-        "openai/gpt-4o-mini",
-        "openai/gpt-3.5-turbo",
-        "anthropic/claude-3-haiku",
-        "google/gemini-1.5-flash"
+        {"provider": "openrouter", "model": "google/gemma-7b-it:free"},
+        {"provider": "openrouter", "model": "meta-llama/llama-3-8b-instruct:free"},
+        {"provider": "openrouter", "model": "mistralai/mistral-7b-instruct:free"},
+        {"provider": "openrouter", "model": "openai/gpt-4o-mini"},
+        {"provider": "gemini", "model": "gemini-1.5-flash"},
+        {"provider": "gemini", "model": "gemini-1.5-pro"}
     ]
     
     raw_ai_text = None
-    ai_result = {"error": "All OpenRouter models failed. Try again later."}
+    ai_result = {"error": "All AI models (OpenRouter and Gemini) failed. Try again later."}
     
-    for model_name in models_to_try:
+    user_prompt = f"The original landing page elements are: {original_hero}. The user's ad image URL is: {request.ad_url}. Text model, infer the ad's vibe/offer/audience from the URL string. Rewrite ALL THREE hero elements (headline, sub-headline, cta_text) to match this ad. Provide the structured JSON output."
+
+    for model_info in models_to_try:
+        provider = model_info["provider"]
+        model_name = model_info["model"]
         try:
             # Step C: Iterate through models and use the first one that succeeds
-            response = requests.post(
-                url="https://openrouter.ai/api/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {os.environ.get('OPENROUTER_API_KEY')}",
-                    "Content-Type": "application/json"
-                },
-                json={
-                    "model": model_name,
-                    "messages": [
-                        {"role": "system", "content": system_prompt},
-                        {
-                            "role": "user", 
-                            "content": f"The original landing page elements are: {original_hero}. The user's ad image URL is: {request.ad_url}. Text model, infer the ad's vibe/offer/audience from the URL string. Rewrite ALL THREE hero elements (headline, sub-headline, cta_text) to match this ad. Provide the structured JSON output."
-                        }
-                    ]
-                }
-            )
+            if provider == "openrouter":
+                response = requests.post(
+                    url="https://openrouter.ai/api/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {os.environ.get('OPENROUTER_API_KEY')}",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "model": model_name,
+                        "messages": [
+                            {"role": "system", "content": system_prompt},
+                            {
+                                "role": "user", 
+                                "content": user_prompt
+                            }
+                        ]
+                    }
+                )
+                response.raise_for_status() 
+                data = response.json()
+                raw_ai_text = data["choices"][0]["message"]["content"]
             
-            response.raise_for_status() # If it throws 429/404, we catch it instantly!
-            data = response.json()
-            raw_ai_text = data["choices"][0]["message"]["content"]
+            elif provider == "gemini":
+                gemini_key = os.environ.get("GEMINI_API_KEY")
+                if not gemini_key:
+                    raise Exception("GEMINI_API_KEY is not set")
+                    
+                response = requests.post(
+                    url=f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={gemini_key}",
+                    headers={"Content-Type": "application/json"},
+                    json={
+                        "contents": [{
+                            "parts": [{"text": system_prompt + "\n\n" + user_prompt}]
+                        }],
+                        "generationConfig": {
+                            "responseMimeType": "application/json"
+                        }
+                    }
+                )
+                response.raise_for_status()
+                data = response.json()
+                raw_ai_text = data["candidates"][0]["content"]["parts"][0]["text"]
             
             import json
             try:
