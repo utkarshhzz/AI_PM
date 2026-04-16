@@ -103,18 +103,13 @@ def personalize_landing_page(request: PersonalizeRequest):
     """
     
     models_to_try = [
-        "google/gemma-4-31b-it:free",
-        "nvidia/nemotron-3-super-120b-a12b:free",
-        "openrouter/elephant-alpha",
-        "anthropic/claude-opus-4.6-fast",
-        "z-ai/glm-5.1",
-        "cohere/rerank-4-pro",
-        "qwen/qwen3.6-plus",
-        "x-ai/grok-4.20-multi-agent",
-        "xiaomi/mimo-v2-omni",
-        "minimax/minimax-m2.7",
-        "openai/gpt-5.4-mini",
-        "perplexity/pplx-embed-v1-4b"
+        "google/gemma-7b-it:free",
+        "meta-llama/llama-3-8b-instruct:free",
+        "mistralai/mistral-7b-instruct:free",
+        "openai/gpt-4o-mini",
+        "openai/gpt-3.5-turbo",
+        "anthropic/claude-3-haiku",
+        "google/gemini-1.5-flash"
     ]
     
     raw_ai_text = None
@@ -166,7 +161,7 @@ def personalize_landing_page(request: PersonalizeRequest):
             
         except Exception as e:
             # If this model failed or threw 429, just print and let the loop continue
-            print(f"Model {model_name} failed. Trying the next one...")
+            print(f"Model {model_name} failed with error {e}. Trying the next one...")
             continue
             
     return {
