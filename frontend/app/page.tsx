@@ -38,7 +38,7 @@ export default function Home() {
     setResponse(null);
 
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api/personalize";
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "https://ai-pm-q8uz.onrender.com/api/personalize";
       const res = await fetch(apiUrl, {
         method: "POST",
         headers: {

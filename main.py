@@ -14,10 +14,7 @@ app = FastAPI()
 # 1. Configure the "Bouncer" (CORS)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "https://ai-pm-jet.vercel.app"
-    ], # Allow local and Vercel frontend
+    allow_origins=["*"], # Allow any frontend connecting, including any Vercel URL
     allow_credentials=True,
     allow_methods=["*"], # Allow all types of requests (GET, POST, etc.)
     allow_headers=["*"],
