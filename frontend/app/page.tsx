@@ -9,6 +9,7 @@ type PersonalizeResponse = {
   backend_used?: string;
   backend_attempts?: string[];
   failure_reasons?: string[];
+  visuals_replaced?: number;
   modified_html?: string;
   ai_analysis?: {
     ad_brief?: {
@@ -253,6 +254,15 @@ export default function Home() {
                   {response.backend_used || "Connected"}
                 </p>
                 <p className="text-xs text-violet-900/70 dark:text-violet-200/80 mt-1">Live personalization pipeline active</p>
+              </div>
+              <div className="rounded-xl border border-amber-200/80 bg-amber-50/80 dark:bg-amber-900/20 dark:border-amber-800 p-4 lg:col-span-3">
+                <p className="text-xs uppercase tracking-wide text-amber-700 dark:text-amber-300 font-semibold">Visual Personalization</p>
+                <p className="text-sm font-semibold text-amber-800 dark:text-amber-300 mt-2">
+                  Images updated: {response.visuals_replaced ?? 0}
+                </p>
+                <p className="text-xs text-amber-900/70 dark:text-amber-200/80 mt-1">
+                  Upload an ad image to transform page visuals while preserving layout structure.
+                </p>
               </div>
             </div>
 

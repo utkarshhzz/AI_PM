@@ -1,10 +1,11 @@
 from fastapi import FastAPI, HTTPException, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 import requests
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, NavigableString
 from urllib.parse import urlparse
 from typing import Any, Dict, List, Optional
 import re
+import base64
 
 app = FastAPI()
 
@@ -70,6 +71,27 @@ def derive_audience(ad_text: str) -> str:
         return "Consumer shoppers"
     return "Qualified prospects"
 
+def looks_like_boilerplate(text: str) -> bool:
+    lowered = text.lower().strip()
+    if not lowered:
+        return True
+    if lowered in ["home", "about", "pricing", "contact", "menu", "login", "sign in"]:
+        return True
+    if re.match(r"^[\d\W_]+$", lowered):
+        return True
+    return False
+
+def tag_priority(tag: str) -> int:
+    if tag == "h1":
+        return 1
+    if tag in ["h2", "h3"]:
+        return 2
+    if tag in ["button", "a"]:
+        return 3
+    if tag in ["p", "li"]:
+        return 4
+    return 5
+
 def scrape_full_page(url: str) -> Dict[str, Any]:
     try:
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
@@ -89,7 +111,11 @@ def scrape_full_page(url: str) -> Dict[str, Any]:
             else:
                 soup.insert(0, new_head)
 
-        tags_to_check = ["h1", "h2", "h3", "p", "button", "a", "li"]
+        tags_to_check = [
+            "h1", "h2", "h3", "h4", "h5", "h6",
+            "p", "button", "a", "li", "span", "label", "small",
+            "strong", "em", "blockquote", "figcaption", "td", "th"
+        ]
         extracted_texts: List[Dict[str, str]] = []
 
         counter = 0
@@ -98,14 +124,21 @@ def scrape_full_page(url: str) -> Dict[str, Any]:
                 continue
 
             text = tag.get_text(strip=True)
-            if 8 <= len(text) <= 260:
+            if 3 <= len(text) <= 260 and not looks_like_boilerplate(text):
                 if not tag.find_all(["p", "div", "section", "article", "h1", "h2", "h3"]):
+                    if any(attr in tag.attrs for attr in ["aria-label", "alt", "title"]):
+                        continue
+                    direct_text_children = [c for c in tag.children if isinstance(c, NavigableString) and str(c).strip()]
+                    if not direct_text_children and tag.name not in ["button", "a", "li"]:
+                        continue
                     tag_id = f"ai-pm-{counter}"
                     tag["data-ai-id"] = tag_id
                     extracted_texts.append({"id": tag_id, "tag": tag.name, "text": text})
                     counter += 1
-                    if counter >= 100:
+                    if counter >= 260:
                         break
+
+        extracted_texts.sort(key=lambda node: (tag_priority(node["tag"]), len(node["text"])))
 
         return {
             "status": "success",
@@ -139,10 +172,14 @@ def role_from_tag(tag: str, original: str) -> str:
     lowered = original.lower()
     if tag in ["h1", "h2", "h3"]:
         return "headline"
+    if tag in ["h4", "h5", "h6"]:
+        return "subheadline"
     if tag in ["button", "a"] and any(
         word in lowered for word in ["buy", "start", "book", "try", "download", "sign", "join", "get"]
     ):
         return "cta"
+    if tag in ["label", "small"] or any(word in lowered for word in ["step", "note", "hint", "optional"]):
+        return "support"
     if any(word in lowered for word in ["review", "trusted", "customers", "secure", "rating", "certified"]):
         return "trust"
     if tag == "li":
@@ -157,7 +194,7 @@ def keep_length_close(new_text: str, original: str, ratio: float = 1.45) -> str:
         return new_text
     return " ".join(words[:max_words]).rstrip(",. ") + "."
 
-def safe_rewrite(original: str, role: str, brief: Dict[str, str], page_context: Dict[str, str]) -> str:
+def safe_rewrite(original: str, role: str, brief: Dict[str, str], page_context: Dict[str, str], idx: int = 0) -> str:
     offer = brief["detected_offer"]
     audience = brief["audience"]
     message = brief["message_snippet"]
@@ -165,10 +202,19 @@ def safe_rewrite(original: str, role: str, brief: Dict[str, str], page_context: 
 
     if role == "headline":
         page_hint = page_context.get("title", "").strip()
-        base = f"{message} for {audience.lower()}".strip()
+        headline_variants = [
+            f"{message} for {audience.lower()}",
+            f"{offer.capitalize()} for {audience.lower()}",
+            f"{message}: clearer value for {audience.lower()}",
+        ]
+        base = headline_variants[idx % len(headline_variants)].strip()
         if page_hint:
             base = f"{base} | {page_hint}"
         candidate = base[:1].upper() + base[1:] if base else cleaned_original
+        return keep_length_close(candidate, cleaned_original)
+
+    if role == "subheadline":
+        candidate = f"{message}. Better message match and stronger clarity."
         return keep_length_close(candidate, cleaned_original)
 
     if role == "cta":
@@ -194,13 +240,27 @@ def safe_rewrite(original: str, role: str, brief: Dict[str, str], page_context: 
         return keep_length_close(cleaned_original, cleaned_original)
 
     if role == "benefit":
-        candidate = f"Aligned with {offer} and clearer outcomes."
+        benefit_variants = [
+            f"Aligned with {offer} and clearer outcomes.",
+            f"Focused on {audience.lower()} needs and outcomes.",
+            "Lower friction with clearer action and value.",
+        ]
+        candidate = benefit_variants[idx % len(benefit_variants)]
+        return keep_length_close(candidate, cleaned_original)
+
+    if role == "support":
+        candidate = "Clear guidance with minimal friction."
         return keep_length_close(candidate, cleaned_original)
 
     if role == "body":
         if len(cleaned_original.split()) < 6:
             return cleaned_original
-        candidate = f"{message}. {offer.capitalize()} and clearer next steps."
+        body_variants = [
+            f"{message}. {offer.capitalize()} and clearer next steps.",
+            f"Built for {audience.lower()}. {offer.capitalize()} with concise guidance.",
+            f"{message}. Improve confidence with consistent page-to-ad messaging.",
+        ]
+        candidate = body_variants[idx % len(body_variants)]
         return keep_length_close(candidate, cleaned_original)
 
     return cleaned_original
@@ -244,6 +304,14 @@ async def personalize_landing_page(
             detail="Provide at least one ad creative input: image, ad text, or ad link.",
         )
 
+    ad_image_base64 = ""
+    ad_image_mime = "image/jpeg"
+    if ad_image is not None:
+        image_bytes = await ad_image.read()
+        if image_bytes:
+            ad_image_base64 = base64.b64encode(image_bytes).decode("utf-8")
+            ad_image_mime = ad_image.content_type or "image/jpeg"
+
     scraped_data = scrape_full_page(normalized_page_url)
     if scraped_data["status"] == "error":
         return {"status": "error", "error": f"Could not scrape landing page: {scraped_data['message']}"}
@@ -259,9 +327,9 @@ async def personalize_landing_page(
 
     replacements = []
     changelog = []
-    for node in extracted_texts:
+    for idx, node in enumerate(extracted_texts):
         role = role_from_tag(node["tag"], node["text"])
-        new_text = safe_rewrite(node["text"], role, ad_brief, page_context)
+        new_text = safe_rewrite(node["text"], role, ad_brief, page_context, idx)
         if new_text and new_text != node["text"]:
             replacements.append({"id": node["id"], "original": node["text"], "new_text": new_text})
             changelog.append(
@@ -277,7 +345,46 @@ async def personalize_landing_page(
         if tag:
             if tag.has_attr("data-ai-id"):
                 del tag["data-ai-id"]
-            tag.string = rep["new_text"]
+            if tag.string is not None:
+                tag.string = rep["new_text"]
+            else:
+                replaced = False
+                for child in list(tag.children):
+                    if isinstance(child, NavigableString) and str(child).strip():
+                        child.replace_with(rep["new_text"])
+                        replaced = True
+                        break
+                if not replaced:
+                    tag.clear()
+                    tag.append(rep["new_text"])
+
+    visuals_replaced = 0
+    if ad_image_base64:
+        ad_src = f"data:{ad_image_mime};base64,{ad_image_base64}"
+        for img in soup.find_all("img"):
+            try:
+                src = (img.get("src") or "").lower()
+                class_str = " ".join(img.get("class", [])).lower()
+                if any(term in src for term in [".svg", "logo", "icon"]) or any(term in class_str for term in ["logo", "icon", "avatar"]):
+                    continue
+                width = img.get("width")
+                height = img.get("height")
+                if width and str(width).isdigit() and int(width) < 90:
+                    continue
+                if height and str(height).isdigit() and int(height) < 90:
+                    continue
+                img["src"] = ad_src
+                if img.has_attr("srcset"):
+                    del img["srcset"]
+                if img.has_attr("sizes"):
+                    del img["sizes"]
+                existing_style = img.get("style", "")
+                img["style"] = f"{existing_style}; object-fit: cover; object-position: center;"
+                visuals_replaced += 1
+                if visuals_replaced >= 18:
+                    break
+            except Exception:
+                continue
 
     for remaining in soup.find_all(attrs={"data-ai-id": True}):
         del remaining["data-ai-id"]
@@ -302,7 +409,7 @@ async def personalize_landing_page(
         "extracted_texts": extracted_texts,
         "ai_analysis": ai_result,
         "modified_html": str(soup),
-        "visuals_replaced": 0,
+        "visuals_replaced": visuals_replaced,
         "source_page": normalized_page_url,
         "ad_context_used": {
             "used_image": ad_image is not None,
