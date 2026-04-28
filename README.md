@@ -17,7 +17,8 @@ The app keeps the original page structure, then rewrites eligible marketing copy
 
 - Frontend: Next.js, React, TypeScript, Tailwind CSS
 - Backend: FastAPI, BeautifulSoup, Requests
-- Deployment: Vercel frontend with a Render-hosted backend fallback
+- Deployment: Vercel frontend with a self-contained personalization API route
+- Optional AI assist: set `GROK_API_KEY` or `XAI_API_KEY` to let Grok refine the campaign profile before the local rewrite engine runs
 
 ## Local Setup
 
@@ -42,7 +43,7 @@ npm run dev
 
 The frontend runs at `http://localhost:3000`.
 
-For deployed environments, set `BACKEND_API_URL` in Vercel if you want to override the default Render backend.
+For deployed environments, set `GROK_API_KEY` or `XAI_API_KEY` in Vercel if you want Grok-assisted campaign profiling. The app still works without it because the route includes a local fallback engine.
 
 ## Verification
 

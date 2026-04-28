@@ -1,5 +1,7 @@
 venv
 .env
+.env.*
+frontend/.env*
 venv/
 __pycache__/
 frontend/node_modules/

@@ -267,7 +267,7 @@ export default function Home() {
               <div className="rounded-xl border border-amber-200/80 bg-amber-50/80 dark:bg-amber-900/20 dark:border-amber-800 p-4 lg:col-span-3">
                 <p className="text-xs uppercase tracking-wide text-amber-700 dark:text-amber-300 font-semibold">Visual Personalization</p>
                 <p className="text-sm font-semibold text-amber-800 dark:text-amber-300 mt-2">
-                  Images updated: {response.visuals_replaced ?? 0}
+                  Visuals updated: {response.visuals_replaced ?? 0}
                 </p>
                 <p className="text-xs text-amber-900/70 dark:text-amber-200/80 mt-1">
                   Visuals are rebuilt as distinct campaign-matched blocks while preserving the page frame.

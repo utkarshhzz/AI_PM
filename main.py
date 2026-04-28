@@ -35,7 +35,7 @@ STOPWORDS = {
     "does", "doing", "done", "each", "every", "for", "from", "get", "had", "has",
     "free", "have", "here", "into", "just", "launch", "like", "made", "make", "more",
     "most", "new", "not", "now", "off", "offer", "our", "out", "over", "own",
-    "page", "plus", "premium", "see", "she", "should", "simple", "start", "than", "that", "the",
+    "page", "percent", "plus", "premium", "see", "she", "should", "simple", "start", "than", "that", "the",
     "their", "them", "then", "there", "these", "they", "this", "through", "today",
     "too", "try", "use", "using", "very", "was", "way", "week", "were", "when",
     "where", "which", "while", "with", "you", "your",
@@ -91,6 +91,7 @@ def extract_offer_hint(text: str) -> str:
     lowered = text.lower()
     offer_patterns = [
         r"\b\d{1,3}%\s*off\b",
+        r"\b\d{1,3}\s*percent\s*(?:off|of)\b",
         r"\b\$?\d+(?:\.\d{2})?\s*(?:off|discount|credit|bonus)\b",
         r"\bfree\s+(?:trial|shipping|consultation|demo|download|delivery)\b",
         r"\blimited\s+time\b",
@@ -637,6 +638,23 @@ def replace_page_visuals(soup: BeautifulSoup, brief: Dict[str, Any], ad_image_ba
             visuals_replaced += 1
         except Exception:
             continue
+
+    if visuals_replaced == 0:
+        replacement = soup.new_tag("div")
+        replacement["class"] = ["ai-pm-generated-campaign", "ai-pm-visual", "ai-pm-visual-0"]
+        replacement["style"] = "width: 100%; aspect-ratio: 16 / 7; max-width: 100%;"
+        caption = visual_caption(brief, 0)
+        replacement["role"] = "img"
+        replacement["aria-label"] = caption
+        label = soup.new_tag("span")
+        label["class"] = "ai-pm-visual-label"
+        label.string = caption
+        replacement.append(label)
+        if soup.body:
+            soup.body.insert(0, replacement)
+        else:
+            soup.insert(0, replacement)
+        visuals_replaced = 1
 
     if visuals_replaced:
         inject_visual_css(soup, ad_image_base64, ad_image_mime)
