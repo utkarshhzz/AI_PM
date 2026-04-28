@@ -1,83 +1,118 @@
-from fastapi import FastAPI,HTTPException
+from fastapi import FastAPI, HTTPException, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import os
 import requests
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
+import json
+import base64
+from urllib.parse import urlparse, urljoin
 
 load_dotenv()
 
-
 app = FastAPI()
 
-# 1. Configure the "Bouncer" (CORS)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # Allow any frontend connecting, including any Vercel URL
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"], # Allow all types of requests (GET, POST, etc.)
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# 2. Define the shape of the data we expect
 class PersonalizeRequest(BaseModel):
     ad_url: str
     page_url: str
 
+def get_base_url(url):
+    parsed = urlparse(url)
+    return f"{parsed.scheme}://{parsed.netloc}"
 
-def scrape_hero_section(url: str):
+def scrape_full_page(url: str):
     try:
-        headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
-        response= requests.get(url,headers=headers,timeout=10)
+        headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+        response = requests.get(url, headers=headers, timeout=15)
         response.raise_for_status()
-        soup=BeautifulSoup(response.text,'html.parser')
         
-        # Extract Headline (h1)
-        h1 = soup.find('h1')
-        headline = h1.get_text(strip=True) if h1 else 'No headline found'
+        soup = BeautifulSoup(response.text, 'html.parser')
         
-        # Extract Sub-headline (usually the first paragraph after h1, or an h2)
-        sub_tag = soup.find(['h2', 'p'])
-        sub_headline = sub_tag.get_text(strip=True) if sub_tag else 'No sub-headline found'
+        # Inject base tag so relative images/css work in the iframe
+        base_tag = soup.new_tag("base", href=get_base_url(url))
+        if soup.head:
+            soup.head.insert(0, base_tag)
+        else:
+            new_head = soup.new_tag("head")
+            new_head.insert(0, base_tag)
+            if soup.body:
+                soup.body.insert_before(new_head)
+            else:
+                soup.insert(0, new_head)
+                
+        # Find critical text elements to personalize (Headers, paragraphs, buttons)
+        tags_to_check = ['h1', 'h2', 'h3', 'p', 'button', 'a', 'span', 'strong']
+        extracted_texts = []
         
-        # Extract CTA Button (usually an 'a' or 'button' tag)
-        cta_tag = soup.find(['a', 'button'])
-        cta_text = cta_tag.get_text(strip=True) if cta_tag else 'No CTA found'
+        counter = 0
+        for tag in soup.find_all(tags_to_check):
+            if tag.parent and tag.parent.name in ['script', 'style', 'nav', 'footer', 'head']:
+                continue
+            
+            text = tag.get_text(strip=True)
+            # Only consider substantial text to alter (e.g. Hero strings, Product descriptions)
+            if len(text) > 10 and len(text) < 150:
+                tag_id = f"ai-pm-{counter}"
+                tag['data-ai-id'] = tag_id
+                extracted_texts.append({
+                    "id": tag_id,
+                    "tag": tag.name,
+                    "text": text
+                })
+                counter += 1
+                if counter >= 20: 
+                    break
 
         return {
             "status": "success",
-            "headline": headline,
-            "sub_headline": sub_headline,
-            "cta_text": cta_text
+            "soup": soup,
+            "extracted_texts": extracted_texts
         }
     except Exception as e:
         return {
             "status": "error",
             "message": str(e)
         }
-# 3. Create the API Endpoint
+
 @app.post("/api/personalize")
-def personalize_landing_page(request: PersonalizeRequest):
-    scraped_data = scrape_hero_section(request.page_url)
+async def personalize_landing_page(
+    page_url: str = Form(...),
+    ad_image: UploadFile = File(...)
+):
+    print(f"Scraping full page: {page_url}...")
+    
+    ad_image_bytes = await ad_image.read()
+    ad_image_base64 = base64.b64encode(ad_image_bytes).decode('utf-8')
+    mime_type = ad_image.content_type or "image/jpeg"
+
+    scraped_data = scrape_full_page(page_url)
     
     if scraped_data["status"] == "error":
         return {"error": "Could not scrape the landing page"}
     
-    original_hero = {
-        "headline": scraped_data["headline"],
-        "sub_headline": scraped_data["sub_headline"],
-        "cta_text": scraped_data["cta_text"]
-    }
+    soup = scraped_data["soup"]
+    extracted_texts = scraped_data["extracted_texts"]
     
-    # Step B: Draft the complex instructions for the AI
     system_prompt = """
-    You are an expert Conversion Rate Optimizer. You analyze ad creatives and align landing pages to them.
+    You are an expert Conversion Rate Optimizer. You analyze ad creatives (images) and perfectly align full landing pages to them.
+    You are given a list of text snippets from a live landing page (Shopify, SaaS, etc.).
+    Rewrite these snippets to match the inferred intent, tone, and offer of the provided Ad Image.
+    Keep the length of the new text similar to the original to prevent breaking the UI structure.
+    
     You MUST respond with strictly formatted JSON. Do not include markdown code blocks like ```json.
     Your JSON must have EXACTLY this structure:
     {
       "ad_brief": {
-        "detected_offer": "Summarize the discount or value prop",
+        "detected_offer": "Summarize the discount or value prop from the image",
         "tone": "What is the vibe?",
         "audience": "Inferred target audience based on the ad"
       },
@@ -85,43 +120,38 @@ def personalize_landing_page(request: PersonalizeRequest):
         "original_relevance": 25,
         "new_relevance": 95
       },
-      "new_hero": {
-        "headline": "Generated headline",
-        "sub_headline": "Generated sub-headline",
-        "cta_text": "Generated CTA text"
-      },
+      "replacements": [
+        {
+          "id": "ai-pm-0",
+          "original": "Original text here",
+          "new_text": "Newly personalized text here"
+        }
+      ],
       "changelog": [
         {
-          "element": "Headline",
-          "cro_principle": "e.g. Message Match",
-          "reasoning": "Plain English explanation of why you made this change",
-          "confidence": "High / Medium / Low",
-          "confidence_reason": "One-line reason for confidence"
+          "element": "e.g. Main Headline",
+          "reasoning": "Why this was changed (e.g. Message Match)",
+          "confidence": "High / Medium / Low"
         }
       ]
     }
     """
     
     models_to_try = [
-        {"provider": "openrouter", "model": "google/gemma-7b-it:free"},
-        {"provider": "openrouter", "model": "meta-llama/llama-3-8b-instruct:free"},
-        {"provider": "openrouter", "model": "mistralai/mistral-7b-instruct:free"},
-        {"provider": "openrouter", "model": "openai/gpt-4o-mini"},
         {"provider": "gemini", "model": "gemini-1.5-flash"},
-        {"provider": "gemini", "model": "gemini-1.5-pro"}
+        {"provider": "gemini", "model": "gemini-1.5-pro"},
+        {"provider": "openrouter", "model": "openai/gpt-4o-mini"}
     ]
     
-    raw_ai_text = None
-    ai_result = {"error": "All AI models (OpenRouter and Gemini) failed. Try again later."}
+    user_prompt = f"The original landing page extracted elements are: {json.dumps(extracted_texts)}. The user's ad image is attached. Rewrite the elements to match the ad. Return the JSON."
     
-    user_prompt = f"The original landing page elements are: {original_hero}. The user's ad image URL is: {request.ad_url}. Text model, infer the ad's vibe/offer/audience from the URL string. Rewrite ALL THREE hero elements (headline, sub-headline, cta_text) to match this ad. Provide the structured JSON output."
-
+    ai_result = {"error": "All AI models failed."}
+    
     for model_info in models_to_try:
-        provider = model_info["provider"]
-        model_name = model_info["model"]
         try:
-            # Step C: Iterate through models and use the first one that succeeds
-            if provider == "openrouter":
+            print(f"Trying {model_info['model']}...")
+            raw_ai_text = ""
+            if model_info["provider"] == "openrouter":
                 response = requests.post(
                     url="https://openrouter.ai/api/v1/chat/completions",
                     headers={
@@ -129,12 +159,15 @@ def personalize_landing_page(request: PersonalizeRequest):
                         "Content-Type": "application/json"
                     },
                     json={
-                        "model": model_name,
+                        "model": model_info["model"],
                         "messages": [
                             {"role": "system", "content": system_prompt},
                             {
                                 "role": "user", 
-                                "content": user_prompt
+                                "content": [
+                                    {"type": "text", "text": user_prompt},
+                                    {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{ad_image_base64}"}}
+                                ]
                             }
                         ]
                     }
@@ -143,53 +176,56 @@ def personalize_landing_page(request: PersonalizeRequest):
                 data = response.json()
                 raw_ai_text = data["choices"][0]["message"]["content"]
             
-            elif provider == "gemini":
+            elif model_info["provider"] == "gemini":
                 gemini_key = os.environ.get("GEMINI_API_KEY")
-                if not gemini_key:
-                    raise Exception("GEMINI_API_KEY is not set")
-                    
                 response = requests.post(
-                    url=f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={gemini_key}",
+                    url=f"https://generativelanguage.googleapis.com/v1beta/models/{model_info['model']}:generateContent?key={gemini_key}",
                     headers={"Content-Type": "application/json"},
                     json={
                         "contents": [{
-                            "parts": [{"text": system_prompt + "\n\n" + user_prompt}]
+                            "parts": [
+                                {"text": system_prompt + "\\n\\n" + user_prompt},
+                                {"inlineData": {"mimeType": mime_type, "data": ad_image_base64}}
+                            ]
                         }],
-                        "generationConfig": {
-                            "responseMimeType": "application/json"
-                        }
+                        "generationConfig": {"responseMimeType": "application/json"}
                     }
                 )
                 response.raise_for_status()
                 data = response.json()
                 raw_ai_text = data["candidates"][0]["content"]["parts"][0]["text"]
             
-            import json
-            try:
-                # Clean up the output in case it wrapped it in markdown
-                if raw_ai_text.startswith("```json"):
-                    raw_ai_text = raw_ai_text.replace("```json", "", 1)
-                
-                if raw_ai_text.endswith("```"):
-                     # Remove the ending markdown block securely
-                     raw_ai_text = raw_ai_text[:raw_ai_text.rfind("```")].strip()
-                     
-                ai_result = json.loads(raw_ai_text.strip())
-                # If we parsed it successfully, we break the model retry loop!
-                break
-                
-            except json.JSONDecodeError:
-                print(f"Model {model_name} returned invalid JSON. Skipping...")
-                ai_result = {"error": "AI refused structured JSON", "raw_output": raw_ai_text}
-                continue # Try the next model
+            print(f"Model returned data: {raw_ai_text[:50]}...")
+            
+            if raw_ai_text.startswith("```json"): raw_ai_text = raw_ai_text.replace("```json", "", 1)
+            if raw_ai_text.endswith("```"): raw_ai_text = raw_ai_text[:raw_ai_text.rfind("```")].strip()
+                 
+            ai_result = json.loads(raw_ai_text.strip())
+            break
             
         except Exception as e:
-            # If this model failed or threw 429, just print and let the loop continue
-            print(f"Model {model_name} failed with error {e}. Trying the next one...")
+            print(f"Model failed: {e}. Trying next...")
             continue
-            
+    
+    if "error" in ai_result:
+        return {"error": ai_result["error"]}
+        
+    print("Injecting into HTML...")
+    replacements = ai_result.get("replacements", [])
+    if isinstance(replacements, list):
+        for rep in replacements:
+            if isinstance(rep, dict):
+                node_id = rep.get("id")
+                new_text = rep.get("new_text")
+                if node_id and new_text:
+                    tag = soup.find(name=True, attrs={"data-ai-id": node_id})
+                    if tag:
+                        del tag['data-ai-id']
+                        tag.string = new_text
+
     return {
         "status": "success",
-        "original_hero": original_hero,
-        "ai_analysis": ai_result
+        "extracted_texts": extracted_texts,
+        "ai_analysis": ai_result,
+        "modified_html": str(soup) 
     }
