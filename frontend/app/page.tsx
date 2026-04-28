@@ -152,8 +152,11 @@ export default function Home() {
   ].filter(Boolean);
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top_right,_#eef2ff,_#f8fafc_40%,_#f8fafc)] dark:bg-zinc-950 flex flex-col p-4 md:p-8">
-      <div className="max-w-6xl mx-auto w-full bg-white/95 backdrop-blur dark:bg-zinc-900/95 rounded-2xl shadow-xl p-6 md:p-8 border border-gray-200 dark:border-zinc-800 mb-8">
+    <main className="relative min-h-screen bg-[radial-gradient(circle_at_top_right,_#eef2ff,_#f8fafc_40%,_#f8fafc)] dark:bg-zinc-950 flex flex-col p-4 md:p-8 overflow-hidden">
+      <div className="pointer-events-none absolute -top-20 -left-16 h-64 w-64 rounded-full bg-blue-300/20 blur-3xl animate-float-slow" />
+      <div className="pointer-events-none absolute top-32 -right-20 h-72 w-72 rounded-full bg-violet-300/20 blur-3xl animate-float-slow" />
+
+      <div className="max-w-6xl mx-auto w-full bg-white/95 backdrop-blur dark:bg-zinc-900/95 rounded-2xl shadow-xl p-6 md:p-8 border border-gray-200 dark:border-zinc-800 mb-8 hover-lift">
         <div className="flex flex-col gap-4 md:flex-row md:justify-between md:items-start mb-8">
           <div className="text-left">
             <h1 className="text-3xl md:text-4xl font-extrabold text-gray-900 dark:text-white mb-2 tracking-tight">
@@ -181,15 +184,15 @@ export default function Home() {
               </span>
             </div>
             <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-2 max-w-3xl">
-              <div className="rounded-lg border border-gray-200 dark:border-zinc-700 bg-white/80 dark:bg-zinc-800/60 px-3 py-2">
+              <div className="rounded-lg border border-gray-200 dark:border-zinc-700 bg-white/80 dark:bg-zinc-800/60 px-3 py-2 hover-lift">
                 <p className="text-xs font-semibold text-gray-500 dark:text-zinc-400">Step 1</p>
                 <p className="text-sm font-medium text-gray-800 dark:text-zinc-200">Add ad creative</p>
               </div>
-              <div className="rounded-lg border border-gray-200 dark:border-zinc-700 bg-white/80 dark:bg-zinc-800/60 px-3 py-2">
+              <div className="rounded-lg border border-gray-200 dark:border-zinc-700 bg-white/80 dark:bg-zinc-800/60 px-3 py-2 hover-lift">
                 <p className="text-xs font-semibold text-gray-500 dark:text-zinc-400">Step 2</p>
                 <p className="text-sm font-medium text-gray-800 dark:text-zinc-200">Paste landing URL</p>
               </div>
-              <div className="rounded-lg border border-gray-200 dark:border-zinc-700 bg-white/80 dark:bg-zinc-800/60 px-3 py-2">
+              <div className="rounded-lg border border-gray-200 dark:border-zinc-700 bg-white/80 dark:bg-zinc-800/60 px-3 py-2 hover-lift">
                 <p className="text-xs font-semibold text-gray-500 dark:text-zinc-400">Step 3</p>
                 <p className="text-sm font-medium text-gray-800 dark:text-zinc-200">Generate aligned page</p>
               </div>
@@ -204,7 +207,7 @@ export default function Home() {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6 flex flex-col rounded-xl border border-gray-200 dark:border-zinc-800 p-4 md:p-6 bg-gradient-to-b from-white to-gray-50/60 dark:from-zinc-900 dark:to-zinc-900">
+        <form onSubmit={handleSubmit} className="space-y-6 flex flex-col rounded-xl border border-gray-200 dark:border-zinc-800 p-4 md:p-6 bg-gradient-to-b from-white to-gray-50/60 dark:from-zinc-900 dark:to-zinc-900 hover-lift">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label htmlFor="adImage" className="block text-sm font-medium text-gray-700 dark:text-zinc-300 mb-1">
@@ -274,7 +277,7 @@ export default function Home() {
             className={`w-full text-white font-bold py-3.5 px-6 rounded-xl transition-all shadow-md mt-6 flex justify-center items-center gap-2 ${
               isLoading
                 ? "bg-blue-400 dark:bg-blue-500/50 cursor-not-allowed opacity-80"
-                : "bg-zinc-900 hover:bg-zinc-800 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200 hover:shadow-lg transform hover:-translate-y-0.5 active:translate-y-0"
+                : "bg-gradient-to-r from-zinc-900 via-slate-800 to-zinc-900 animate-gradient-shift dark:from-white dark:via-zinc-100 dark:to-white dark:text-zinc-950 hover:shadow-lg transform hover:-translate-y-0.5 active:translate-y-0"
             }`}
           >
             {isLoading ? (
@@ -313,7 +316,7 @@ export default function Home() {
               </button>
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              <div className="rounded-xl border border-blue-200/80 bg-blue-50/80 dark:bg-blue-900/20 dark:border-blue-800 p-4">
+              <div className="rounded-xl border border-blue-200/80 bg-blue-50/80 dark:bg-blue-900/20 dark:border-blue-800 p-4 hover-lift">
                 <p className="text-xs uppercase tracking-wide text-blue-700 dark:text-blue-300 font-semibold">Relevance Lift</p>
                 <p className="text-3xl font-black text-blue-700 dark:text-blue-300 mt-1">+{scoreDelta}</p>
                 <p className="text-xs text-blue-900/70 dark:text-blue-200/80 mt-1">
@@ -323,19 +326,19 @@ export default function Home() {
                   <div className="h-full bg-blue-500 transition-all duration-500" style={{ width: `${matchRatio}%` }} />
                 </div>
               </div>
-              <div className="rounded-xl border border-emerald-200/80 bg-emerald-50/80 dark:bg-emerald-900/20 dark:border-emerald-800 p-4">
+              <div className="rounded-xl border border-emerald-200/80 bg-emerald-50/80 dark:bg-emerald-900/20 dark:border-emerald-800 p-4 hover-lift">
                 <p className="text-xs uppercase tracking-wide text-emerald-700 dark:text-emerald-300 font-semibold">Personalized Elements</p>
                 <p className="text-3xl font-black text-emerald-700 dark:text-emerald-300 mt-1">{replacementsCount}</p>
                 <p className="text-xs text-emerald-900/70 dark:text-emerald-200/80 mt-1">Includes sections, reviews, trust proof, and footer</p>
               </div>
-              <div className="rounded-xl border border-violet-200/80 bg-violet-50/80 dark:bg-violet-900/20 dark:border-violet-800 p-4">
+              <div className="rounded-xl border border-violet-200/80 bg-violet-50/80 dark:bg-violet-900/20 dark:border-violet-800 p-4 hover-lift">
                 <p className="text-xs uppercase tracking-wide text-violet-700 dark:text-violet-300 font-semibold">Backend Status</p>
                 <p className="text-sm font-semibold text-violet-800 dark:text-violet-300 mt-2 truncate">
                   {response.backend_used || "Connected"}
                 </p>
                 <p className="text-xs text-violet-900/70 dark:text-violet-200/80 mt-1">Live personalization pipeline active</p>
               </div>
-              <div className="rounded-xl border border-amber-200/80 bg-amber-50/80 dark:bg-amber-900/20 dark:border-amber-800 p-4 lg:col-span-3">
+              <div className="rounded-xl border border-amber-200/80 bg-amber-50/80 dark:bg-amber-900/20 dark:border-amber-800 p-4 lg:col-span-3 hover-lift">
                 <p className="text-xs uppercase tracking-wide text-amber-700 dark:text-amber-300 font-semibold">Visual Personalization</p>
                 <p className="text-sm font-semibold text-amber-800 dark:text-amber-300 mt-2">
                   Visuals updated: {response.visuals_replaced ?? 0}
@@ -347,7 +350,7 @@ export default function Home() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="bg-blue-50 dark:bg-blue-900/20 p-6 rounded-xl border border-blue-100 dark:border-blue-800">
+              <div className="bg-blue-50 dark:bg-blue-900/20 p-6 rounded-xl border border-blue-100 dark:border-blue-800 hover-lift">
                 <h2 className="text-xl font-bold text-blue-900 dark:text-blue-400 mb-4">Campaign Profile</h2>
                 <div className="space-y-4">
                   <div>
@@ -387,7 +390,7 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="bg-green-50 dark:bg-green-900/20 p-6 rounded-xl border border-green-100 dark:border-green-800">
+              <div className="bg-green-50 dark:bg-green-900/20 p-6 rounded-xl border border-green-100 dark:border-green-800 hover-lift">
                 <h2 className="text-xl font-bold text-green-900 dark:text-green-400 mb-2">Execution Details</h2>
                 <p className="text-green-900/80 dark:text-green-200/80 text-sm">
                   Inputs used: {inputsUsed.length ? inputsUsed.join(", ") : "none"}

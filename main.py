@@ -336,9 +336,9 @@ def clean_candidate(candidate: str, original: str, role: str) -> str:
     if role == "cta":
         return keep_length_close(candidate, original, ratio=1.2, min_words=role_min_words["cta"])
     if role == "headline":
-        return keep_length_close(candidate, original, ratio=2.4, min_words=role_min_words["headline"])
+        return keep_length_close(candidate, original, ratio=1.25, min_words=5)
     if role == "subheadline":
-        return keep_length_close(candidate, original, ratio=1.9, min_words=role_min_words["subheadline"])
+        return keep_length_close(candidate, original, ratio=1.35, min_words=8)
     if role == "body":
         return keep_length_close(candidate, original, ratio=1.65, min_words=role_min_words["body"])
     if len(original.split()) <= 4 and role not in ["headline", "subheadline"]:
@@ -427,6 +427,25 @@ def safe_rewrite(original: str, role: str, brief: Dict[str, Any], page_context: 
         return clean_candidate(body_variants[idx % len(body_variants)], cleaned_original, role)
 
     return cleaned_original
+
+def build_hero_copy(brief: Dict[str, Any], page_context: Dict[str, str]) -> Dict[str, str]:
+    offer = title_case_soft(brief.get("detected_offer", "Primary value proposition"))
+    audience = brief.get("audience", "qualified prospects")
+    action = brief.get("primary_action", "learn")
+    theme = title_case_soft(brief.get("campaign_theme", "Clear message match"))
+    page_hint = compact_sentence(page_context.get("title", ""), "", max_words=4)
+
+    headline_variants = [
+        f"{offer} for {audience}",
+        f"{theme} for {audience}",
+        f"From Ad Click to {action.title()}",
+    ]
+    headline = headline_variants[0]
+    if page_hint:
+        headline = f"{headline} | {page_hint}"
+
+    subheading = f"Clear message match, stronger trust, and a simple path to {action}."
+    return {"headline": headline, "subheading": subheading}
 
 def reasoning_for_role(role: str, brief: Dict[str, Any]) -> str:
     theme = brief.get("campaign_theme", "the campaign theme")
@@ -524,6 +543,16 @@ def visual_caption(brief: Dict[str, Any], idx: int) -> str:
     ]
     return compact_sentence(captions[idx % len(captions)], "Campaign creative", max_words=6)
 
+def visual_subcaption(brief: Dict[str, Any]) -> str:
+    audience = brief.get("audience", "qualified prospects")
+    offer = brief.get("detected_offer", "primary value proposition")
+    action = brief.get("primary_action", "learn")
+    return compact_sentence(
+        f"Designed for {audience} with {offer} and a clear path to {action}.",
+        "Clear campaign message and next step.",
+        max_words=14,
+    )
+
 def build_visual_css(ad_image_base64: str, ad_image_mime: str) -> str:
     safe_mime = ad_image_mime if re.match(r"^image/[A-Za-z0-9.+-]+$", ad_image_mime or "") else "image/jpeg"
     if ad_image_base64:
@@ -569,11 +598,21 @@ def build_visual_css(ad_image_base64: str, ad_image_mime: str) -> str:
   position: absolute;
   left: clamp(14px, 4%, 34px);
   right: clamp(14px, 4%, 34px);
-  bottom: clamp(14px, 5%, 36px);
+  bottom: clamp(34px, 8%, 54px);
   color: #fff;
-  font: 800 clamp(16px, 2.6vw, 36px)/1.05 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font: 800 clamp(16px, 2.2vw, 30px)/1.12 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   letter-spacing: 0;
   text-shadow: 0 2px 18px rgba(0,0,0,.38);
+  max-width: 760px;
+}}
+.ai-pm-visual-sub {{
+  position: absolute;
+  left: clamp(14px, 4%, 34px);
+  right: clamp(14px, 4%, 34px);
+  bottom: clamp(12px, 4%, 24px);
+  color: rgba(255,255,255,.92);
+  font: 500 clamp(11px, 1.1vw, 14px)/1.35 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  text-shadow: 0 2px 12px rgba(0,0,0,.3);
   max-width: 760px;
 }}
 .ai-pm-visual-0 {{ --ai-pm-pos: center; --ai-pm-filter: saturate(1.18) contrast(1.05); --ai-pm-overlay: linear-gradient(135deg, rgba(2, 6, 23, .68), rgba(14, 116, 144, .16)); }}
@@ -632,6 +671,10 @@ def replace_page_visuals(soup: BeautifulSoup, brief: Dict[str, Any], ad_image_ba
             label["class"] = "ai-pm-visual-label"
             label.string = caption
             replacement.append(label)
+            sublabel = soup.new_tag("span")
+            sublabel["class"] = "ai-pm-visual-sub"
+            sublabel.string = visual_subcaption(brief)
+            replacement.append(sublabel)
 
             target = img.parent if img.parent and getattr(img.parent, "name", None) == "picture" else img
             target.replace_with(replacement)
@@ -650,6 +693,10 @@ def replace_page_visuals(soup: BeautifulSoup, brief: Dict[str, Any], ad_image_ba
         label["class"] = "ai-pm-visual-label"
         label.string = caption
         replacement.append(label)
+        sublabel = soup.new_tag("span")
+        sublabel["class"] = "ai-pm-visual-sub"
+        sublabel.string = visual_subcaption(brief)
+        replacement.append(sublabel)
         if soup.body:
             soup.body.insert(0, replacement)
         else:
@@ -710,9 +757,20 @@ async def personalize_landing_page(
 
     replacements = []
     changelog = []
+    hero_copy = build_hero_copy(ad_brief, page_context)
+
+    used_primary_headline = False
+    used_primary_subheading = False
     for idx, node in enumerate(extracted_texts):
         role = role_from_tag(node["tag"], node["text"])
-        new_text = safe_rewrite(node["text"], role, ad_brief, page_context, idx)
+        if role == "headline" and not used_primary_headline:
+            new_text = clean_candidate(hero_copy["headline"], node["text"], "headline")
+            used_primary_headline = True
+        elif role in ["subheadline", "body"] and not used_primary_subheading and len(node["text"].split()) >= 8:
+            new_text = clean_candidate(hero_copy["subheading"], node["text"], "subheadline")
+            used_primary_subheading = True
+        else:
+            new_text = safe_rewrite(node["text"], role, ad_brief, page_context, idx)
         if new_text and new_text != node["text"]:
             replacements.append({"id": node["id"], "original": node["text"], "new_text": new_text})
             changelog.append(
