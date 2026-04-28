@@ -97,7 +97,7 @@ async def personalize_landing_page(
     scraped_data = scrape_full_page(page_url)
     
     if scraped_data["status"] == "error":
-        return {"error": "Could not scrape the landing page"}
+        return {"error": f"Could not scrape the landing page. Detail: {scraped_data['message']}"}
     
     soup = scraped_data["soup"]
     extracted_texts = scraped_data["extracted_texts"]
