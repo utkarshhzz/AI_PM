@@ -35,7 +35,10 @@ type LandingCopy = {
   benefitCards: Array<{ title: string; text: string }>;
   proofStats: Array<{ value: string; label: string }>;
   steps: Array<{ title: string; text: string }>;
+  reviews: Array<{ quote: string; name: string; detail: string }>;
+  trustItems: Array<{ title: string; text: string }>;
   faq: Array<{ question: string; answer: string }>;
+  footerLinks: Array<{ label: string; href: string }>;
 };
 
 type SourceTheme = {
@@ -597,9 +600,26 @@ function buildLandingCopy(brief: AdBrief, sourceTheme: SourceTheme): LandingCopy
         { title: "Bundle essentials", text: "Add the gym products that fit your routine and discount threshold." },
         { title: "Train stocked up", text: "Keep your supplement shelf ready for the next block." },
       ],
+      reviews: [
+        { quote: "The page made the offer clear right away. I knew which stack fit my routine before I hit checkout.", name: "Aarav S.", detail: "Strength training customer" },
+        { quote: "Protein, creatine, and pre-workout were grouped by goal, so it felt simple instead of overwhelming.", name: "Maya R.", detail: "Gym supplement shopper" },
+        { quote: "The discount messaging stayed visible without feeling spammy. That made the bundle decision easy.", name: "Dev P.", detail: "Repeat fitness buyer" },
+      ],
+      trustItems: [
+        { title: "Goal-based product groups", text: "Shoppers can compare supplements by training need, not random catalog order." },
+        { title: "Offer visible throughout", text: `${offer} stays present in the hero, product area, reviews, and final CTA.` },
+        { title: "Built for quick buying", text: "Clear copy, short sections, and repeated action points reduce hesitation." },
+      ],
       faq: [
         { question: "What products does the offer cover?", answer: "Use the page to highlight gym supplements, protein, creatine, pre-workout, recovery products, and related training essentials." },
         { question: "Who is this landing page for?", answer: "Fitness shoppers who saw the ad and want a clear discount-focused path to gym products." },
+        { question: "Can reviews be adapted?", answer: "Yes. These review cards are campaign-safe placeholders that can be replaced with real customer proof when available." },
+      ],
+      footerLinks: [
+        { label: "Shop products", href: "#products" },
+        { label: "Benefits", href: "#benefits" },
+        { label: "Reviews", href: "#reviews" },
+        { label: "FAQ", href: "#faq" },
       ],
     };
   }
@@ -634,9 +654,26 @@ function buildLandingCopy(brief: AdBrief, sourceTheme: SourceTheme): LandingCopy
       { title: "Explain the value", text: "Show benefits, proof, and practical reasons to continue." },
       { title: "Make action obvious", text: `Guide visitors toward a clear ${brief.primary_action} step.` },
     ],
+    reviews: [
+      { quote: "The landing page matched the ad promise immediately, so the next step felt obvious.", name: "Campaign visitor", detail: "High-intent prospect" },
+      { quote: "The benefits were organized clearly and helped me understand the offer without hunting around.", name: "Qualified buyer", detail: "Comparison shopper" },
+      { quote: "The page felt focused and credible from the first section through the final CTA.", name: "Returning customer", detail: "Repeat visitor" },
+    ],
+    trustItems: [
+      { title: "Message match", text: `Every section reinforces ${brief.campaign_theme}.` },
+      { title: "Clear proof path", text: brief.proof_phrase },
+      { title: "Action-focused layout", text: `The page keeps visitors moving toward ${brief.primary_action}.` },
+    ],
     faq: [
       { question: "Why does this page look different from the original URL?", answer: "The preview keeps source context but creates a coherent campaign landing page from the ad instead of mixing unrelated old content." },
       { question: "Can this work with any ad?", answer: "Yes. The campaign profile changes the offer, audience, products, benefits, and CTA based on the ad copy, image, and optional ad link." },
+      { question: "Can reviews and proof be swapped?", answer: "Yes. The generated review cards are placeholders that make the layout complete and can be replaced with real testimonials." },
+    ],
+    footerLinks: [
+      { label: "Offer", href: "#offer" },
+      { label: "Benefits", href: "#benefits" },
+      { label: "Reviews", href: "#reviews" },
+      { label: "FAQ", href: "#faq" },
     ],
   };
 }
@@ -679,6 +716,18 @@ function buildGeneratedLandingPage(copy: LandingCopy, brief: AdBrief, pageUrl: s
             <summary>${escapeHtml(item.question)}</summary>
             <p>${escapeHtml(item.answer)}</p>
           </details>`).join("");
+  const reviews = copy.reviews.map((review) => `
+          <article class="review-card">
+            <div class="stars" aria-label="5 out of 5 stars">★★★★★</div>
+            <blockquote>${escapeHtml(review.quote)}</blockquote>
+            <footer><strong>${escapeHtml(review.name)}</strong><span>${escapeHtml(review.detail)}</span></footer>
+          </article>`).join("");
+  const trustItems = copy.trustItems.map((item) => `
+          <article class="trust-item">
+            <h3>${escapeHtml(item.title)}</h3>
+            <p>${escapeHtml(item.text)}</p>
+          </article>`).join("");
+  const footerLinks = copy.footerLinks.map((link) => `<a href="${escapeAttr(link.href)}">${escapeHtml(link.label)}</a>`).join("");
 
   return `<!doctype html>
 <html lang="en">
@@ -752,15 +801,34 @@ function buildGeneratedLandingPage(copy: LandingCopy, brief: AdBrief, pageUrl: s
     .steps li { display: flex; gap: 16px; padding: 22px; border: 1px solid rgba(255,255,255,.14); border-radius: var(--radius); background: rgba(255,255,255,.06); }
     .steps span { flex: 0 0 34px; height: 34px; display: grid; place-items: center; border-radius: 999px; background: var(--accent-3); color: #111; font-weight: 900; }
     .steps li p { color: rgba(255,255,255,.72); }
+    .review-wrap { display: grid; grid-template-columns: 1.2fr 1.8fr; gap: 18px; align-items: start; }
+    .review-panel { position: sticky; top: 90px; border: 1px solid var(--line); border-radius: var(--radius); padding: 24px; background: color-mix(in srgb, var(--accent) 8%, var(--panel)); }
+    .review-panel strong { display: block; font-size: clamp(36px, 6vw, 72px); line-height: .9; color: var(--accent); }
+    .review-panel span { display: block; margin-top: 8px; color: var(--muted); font-weight: 700; }
+    .reviews { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    .review-card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; }
+    .stars { color: var(--accent-3); letter-spacing: 0; font-size: 14px; font-weight: 900; margin-bottom: 16px; }
+    blockquote { margin: 0; color: var(--ink); font-size: 17px; line-height: 1.5; font-weight: 680; }
+    .review-card footer { margin-top: 18px; display: flex; flex-direction: column; gap: 3px; color: var(--muted); font-size: 14px; }
+    .review-card footer strong { color: var(--ink); font-size: 15px; }
+    .trust-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; padding: 0 clamp(18px, 5vw, 72px) clamp(42px, 7vw, 84px); }
+    .trust-item { border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); padding: 20px; }
+    .trust-item h3 { margin: 0 0 8px; font-size: 18px; font-weight: 850; }
+    .trust-item p { margin: 0; color: var(--muted); line-height: 1.55; font-size: 14px; }
     .faq { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
     summary { cursor: pointer; font-weight: 850; font-size: 18px; }
     details p { margin-top: 12px; }
     .final { display: grid; grid-template-columns: 1.2fr .8fr; gap: 18px; align-items: center; background: color-mix(in srgb, var(--accent) 9%, var(--panel)); border-top: 1px solid var(--line); }
     .final h2 { margin: 0; font-size: clamp(32px, 5vw, 64px); line-height: 1; font-weight: 900; }
     .final p { color: var(--muted); font-size: 17px; line-height: 1.58; }
+    .site-footer { padding: 28px clamp(18px, 5vw, 72px); border-top: 1px solid var(--line); display: grid; grid-template-columns: 1fr auto; gap: 18px; align-items: center; color: var(--muted); background: var(--panel); }
+    .footer-brand { display: flex; align-items: center; gap: 10px; color: var(--ink); font-weight: 850; }
+    .footer-links { display: flex; flex-wrap: wrap; gap: 14px; font-size: 14px; font-weight: 700; }
+    .footer-note { margin-top: 8px; font-size: 13px; line-height: 1.45; }
     @media (max-width: 920px) {
       .hero, .final { grid-template-columns: 1fr; }
-      .grid, .benefit-row, .steps, .stats, .faq { grid-template-columns: 1fr; }
+      .grid, .benefit-row, .steps, .stats, .faq, .reviews, .review-wrap, .trust-strip, .site-footer { grid-template-columns: 1fr; }
+      .review-panel { position: static; }
       .nav-links { display: none; }
       h1 { font-size: clamp(38px, 14vw, 68px); }
     }
@@ -770,7 +838,7 @@ function buildGeneratedLandingPage(copy: LandingCopy, brief: AdBrief, pageUrl: s
   <main class="shell">
     <nav class="nav">
       <a class="brand" href="#top"><span class="brand-mark">${escapeHtml(sourceTheme.brandMark)}</span><span>${escapeHtml(copy.brandName)}</span><span class="source-note">ad-matched</span></a>
-      <div class="nav-links"><a href="#products">Products</a><a href="#benefits">Benefits</a><a href="#faq">FAQ</a><a class="cta-small" href="#offer">${escapeHtml(copy.ctaPrimary)}</a></div>
+      <div class="nav-links"><a href="#products">Products</a><a href="#benefits">Benefits</a><a href="#reviews">Reviews</a><a href="#faq">FAQ</a><a class="cta-small" href="#offer">${escapeHtml(copy.ctaPrimary)}</a></div>
     </nav>
     <header class="hero" id="top">
       <div>
@@ -796,6 +864,20 @@ function buildGeneratedLandingPage(copy: LandingCopy, brief: AdBrief, pageUrl: s
       <div class="section-head"><h2>A simple path from ad click to checkout</h2><p>Keep the landing page focused on the offer, the products, and the next step.</p></div>
       <ol class="steps">${steps}</ol>
     </section>
+    <section id="reviews">
+      <div class="review-wrap">
+        <div class="review-panel">
+          <strong>4.9</strong>
+          <span>review-ready proof section</span>
+          <p>Use these cards as polished placeholders, then swap in real testimonials when the business has them.</p>
+        </div>
+        <div>
+          <div class="section-head"><h2>Customer reviews that support the offer</h2><p>Social proof helps the page feel complete and gives visitors another reason to trust the campaign.</p></div>
+          <div class="reviews">${reviews}</div>
+        </div>
+      </div>
+    </section>
+    <div class="trust-strip">${trustItems}</div>
     <section id="faq">
       <div class="section-head"><h2>Quick answers</h2><p>Answer the questions that usually slow down supplement and gym-product shoppers.</p></div>
       <div class="faq">${faq}</div>
@@ -804,6 +886,13 @@ function buildGeneratedLandingPage(copy: LandingCopy, brief: AdBrief, pageUrl: s
       <div><h2>${escapeHtml(copy.offerLine)} is ready to claim.</h2><p>Use this campaign page to keep the entire experience aligned with the ad: offer, product value, benefits, proof, and checkout action.</p></div>
       <div class="actions"><a class="btn btn-primary" href="${escapeAttr(pageUrl)}">${escapeHtml(copy.ctaPrimary)}</a><a class="btn btn-secondary" href="#top">Review offer</a></div>
     </section>
+    <footer class="site-footer">
+      <div>
+        <div class="footer-brand"><span class="brand-mark">${escapeHtml(sourceTheme.brandMark)}</span><span>${escapeHtml(copy.brandName)}</span></div>
+        <div class="footer-note">Generated from the source site style and campaign ad inputs. Replace placeholder reviews with real customer proof before production launch.</div>
+      </div>
+      <nav class="footer-links" aria-label="Footer">${footerLinks}</nav>
+    </footer>
   </main>
 </body>
 </html>`;
@@ -816,7 +905,10 @@ function buildGeneratedReplacements(copy: LandingCopy): Rewrite[] {
     "Original primary CTA",
     "Original product cards",
     "Original benefit section",
+    "Original review section",
+    "Original trust section",
     "Original FAQ section",
+    "Original footer",
   ];
   const news = [
     copy.headline,
@@ -824,7 +916,10 @@ function buildGeneratedReplacements(copy: LandingCopy): Rewrite[] {
     copy.ctaPrimary,
     copy.productCards.map((card) => card.title).join("; "),
     copy.benefitCards.map((card) => card.title).join("; "),
+    copy.reviews.map((item) => item.quote).join("; "),
+    copy.trustItems.map((item) => item.title).join("; "),
     copy.faq.map((item) => item.question).join("; "),
+    copy.footerLinks.map((item) => item.label).join("; "),
   ];
   return news.map((newText, index) => ({ id: `generated-${index}`, original: originals[index], new_text: newText }));
 }
@@ -834,6 +929,9 @@ function buildGeneratedChangelog(brief: AdBrief) {
     { element: "Full landing page", reasoning: `Generated a coherent campaign page around ${brief.campaign_theme} instead of mixing unrelated source copy.`, confidence: "High" },
     { element: "Hero", reasoning: `Made ${brief.detected_offer} the first visible promise for ${brief.audience}.`, confidence: "High" },
     { element: "Product cards", reasoning: `Added ad-relevant product categories and benefit framing for ${brief.industry}.`, confidence: "High" },
+    { element: "Customer reviews", reasoning: "Added review-ready social proof cards so the page feels complete for ecommerce-style campaigns.", confidence: "Medium" },
+    { element: "Trust strip", reasoning: "Added concise assurance points that support the offer and reduce buying hesitation.", confidence: "Medium" },
+    { element: "Footer", reasoning: "Added source-styled footer navigation and production notes for a complete landing page structure.", confidence: "High" },
     { element: "Visual system", reasoning: "Created a polished campaign visual treatment from the ad image or generated fallback styling.", confidence: "Medium" },
     { element: "CTA path", reasoning: `Repeated a clear ${brief.primary_action} action without unrelated website messaging.`, confidence: "High" },
   ];

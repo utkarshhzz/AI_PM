@@ -11,6 +11,7 @@ The app uses the original URL as source context, borrows its visual style, then 
 - Builds a campaign profile from the ad inputs: offer, tone, audience, industry, action, theme, and proof angle.
 - Generates a complete campaign landing page that keeps a source-inspired look while avoiding mismatched leftover copy from unrelated websites.
 - Rebuilds the visual system around the uploaded ad image or a polished generated campaign treatment.
+- Adds conversion-ready support sections such as customer reviews, trust proof, FAQs, and a footer.
 - Shows relevance lift, rewritten elements, visual updates, campaign profile, change reasoning, and a desktop/mobile iframe preview.
 
 ## Tech Stack

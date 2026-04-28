@@ -146,6 +146,9 @@ export default function Home() {
               <span className="text-xs px-2.5 py-1 rounded-full bg-violet-50 text-violet-700 border border-violet-200 dark:bg-violet-900/30 dark:text-violet-300 dark:border-violet-800">
                 Trust Framing
               </span>
+              <span className="text-xs px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800">
+                Reviews + Footer
+              </span>
             </div>
           </div>
           <button
@@ -255,7 +258,7 @@ export default function Home() {
               <div className="rounded-xl border border-emerald-200/80 bg-emerald-50/80 dark:bg-emerald-900/20 dark:border-emerald-800 p-4">
                 <p className="text-xs uppercase tracking-wide text-emerald-700 dark:text-emerald-300 font-semibold">Personalized Elements</p>
                 <p className="text-3xl font-black text-emerald-700 dark:text-emerald-300 mt-1">{replacementsCount}</p>
-                <p className="text-xs text-emerald-900/70 dark:text-emerald-200/80 mt-1">Generated as coherent landing sections</p>
+                <p className="text-xs text-emerald-900/70 dark:text-emerald-200/80 mt-1">Includes sections, reviews, trust proof, and footer</p>
               </div>
               <div className="rounded-xl border border-violet-200/80 bg-violet-50/80 dark:bg-violet-900/20 dark:border-violet-800 p-4">
                 <p className="text-xs uppercase tracking-wide text-violet-700 dark:text-violet-300 font-semibold">Backend Status</p>
