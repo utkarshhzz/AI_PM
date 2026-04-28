@@ -113,11 +113,21 @@ export default function Home() {
           <button
             type="submit"
             disabled={isLoading}
-            className={`w-full text-white font-medium py-3 px-4 rounded-lg transition-colors shadow-sm mt-6 ${
-              isLoading ? "bg-blue-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"
+            className={`w-full text-white font-bold py-3.5 px-6 rounded-xl transition-all shadow-md mt-6 flex justify-center items-center gap-2 ${
+              isLoading 
+                ? "bg-blue-400 dark:bg-blue-500/50 cursor-not-allowed opacity-80" 
+                : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 hover:shadow-lg transform hover:-translate-y-0.5 active:translate-y-0"
             }`}
           >
-            {isLoading ? "Analyzing Full DOM & Generating Rewrites..." : "Personalize Full Website"}
+            {isLoading ? (
+                <>
+                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Mapping DOM & Applying AI Personalization...
+                </>
+            ) : "🚀 Generate Personalized Landing Page"}
           </button>
         </form>
 
@@ -191,19 +201,20 @@ export default function Home() {
 
       {/* Full Page Live Preview iframe */}
       {response && response.status === "success" && response.modified_html && !response.ai_analysis?.error && (
-          <div className="w-[95%] mx-auto h-[900px] bg-white dark:bg-zinc-900 rounded-xl shadow-2xl border border-gray-200 dark:border-zinc-800 overflow-hidden flex flex-col mt-4 border-b-8 border-x-8">
-              <div className="bg-zinc-100 dark:bg-zinc-800 p-3 border-b border-gray-200 dark:border-zinc-700 flex items-center gap-4">
+          <div className="w-[95%] max-w-[1400px] mx-auto h-[800px] bg-white dark:bg-zinc-900 rounded-xl shadow-[0_20px_50px_-12px_rgba(59,130,246,0.3)] border border-blue-500/20 overflow-hidden flex flex-col mt-12 mb-16 border-b-8 border-x-8 border-zinc-200 dark:border-zinc-800 transition-all duration-700 ease-out transform scale-100 opacity-100">
+              <div className="bg-zinc-100 dark:bg-zinc-900 p-3 border-b border-zinc-200 dark:border-zinc-800 flex items-center gap-4">
                   <div className="flex gap-2">
-                      <div className="w-3 h-3 rounded-full bg-red-400"></div>
-                      <div className="w-3 h-3 rounded-full bg-yellow-400"></div>
-                      <div className="w-3 h-3 rounded-full bg-green-400"></div>
+                      <div className="w-3.5 h-3.5 rounded-full bg-red-400 hover:bg-red-500 cursor-pointer shadow-sm"></div>
+                      <div className="w-3.5 h-3.5 rounded-full bg-yellow-400 hover:bg-yellow-500 cursor-pointer shadow-sm"></div>
+                      <div className="w-3.5 h-3.5 rounded-full bg-green-400 hover:bg-green-500 cursor-pointer shadow-sm"></div>
                   </div>
-                  <div className="text-xs font-mono text-zinc-500 dark:text-zinc-400 bg-white dark:bg-zinc-900 px-3 py-1 rounded w-full max-w-2xl truncate shadow-inner border border-zinc-200 dark:border-zinc-700">
-                      Personalized Preview: {pageUrl}
+                  <div className="text-xs font-mono text-zinc-500 dark:text-zinc-400 bg-white dark:bg-zinc-950 px-4 py-1.5 rounded-md w-full max-w-2xl truncate shadow-sm border border-zinc-200 dark:border-zinc-800 flex items-center justify-center gap-2">
+                      <span>🔒</span>
+                      <span className="text-green-600 dark:text-green-400">Cro-Optimized:</span> {pageUrl}
                   </div>
               </div>
               <iframe 
-                className="w-full h-full flex-grow border-none"
+                className="w-full h-full flex-grow border-none bg-white"
                 srcDoc={response.modified_html}
                 sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-modals"
                 title="Personalized Landing Page"

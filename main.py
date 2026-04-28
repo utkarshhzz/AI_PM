@@ -50,27 +50,30 @@ def scrape_full_page(url: str):
                 soup.insert(0, new_head)
                 
         # Find critical text elements to personalize (Headers, paragraphs, buttons)
-        tags_to_check = ['h1', 'h2', 'h3', 'p', 'button', 'a', 'span', 'strong']
+        tags_to_check = ['h1', 'h2', 'h3', 'h4', 'p', 'button', 'a', 'span']
         extracted_texts = []
         
         counter = 0
         for tag in soup.find_all(tags_to_check):
-            if tag.parent and tag.parent.name in ['script', 'style', 'nav', 'footer', 'head']:
+            # Skip hidden elements, utility UI, and non-content areas
+            if tag.find_parent(['nav', 'header', 'footer', 'script', 'style', 'noscript', 'head', 'label', 'form']):
                 continue
-            
+                
             text = tag.get_text(strip=True)
-            # Only consider substantial text to alter (e.g. Hero strings, Product descriptions)
-            if len(text) > 10 and len(text) < 150:
-                tag_id = f"ai-pm-{counter}"
-                tag['data-ai-id'] = tag_id
-                extracted_texts.append({
-                    "id": tag_id,
-                    "tag": tag.name,
-                    "text": text
-                })
-                counter += 1
-                if counter >= 20: 
-                    break
+            # Find substantial text blocks inside main content
+            if len(text) > 10 and len(text) < 250:
+                # Ensure the tag doesn't already have an ID and is a primary leaf node (mostly text)
+                if not tag.find(['p', 'h1', 'h2', 'h3', 'h4']):
+                    tag_id = f"ai-pm-{counter}"
+                    tag['data-ai-id'] = tag_id
+                    extracted_texts.append({
+                        "id": tag_id,
+                        "tag": tag.name,
+                        "text": text
+                    })
+                    counter += 1
+                    if counter >= 50: # Grab up to 50 significant nodes for maximum personalization
+                        break
 
         return {
             "status": "success",
@@ -103,18 +106,22 @@ async def personalize_landing_page(
     extracted_texts = scraped_data["extracted_texts"]
     
     system_prompt = """
-    You are an expert Conversion Rate Optimizer. You analyze ad creatives (images) and perfectly align full landing pages to them.
-    You are given a list of text snippets from a live landing page (Shopify, SaaS, etc.).
-    Rewrite these snippets to match the inferred intent, tone, and offer of the provided Ad Image.
-    Keep the length of the new text similar to the original to prevent breaking the UI structure.
+    You are an elite, world-class Conversion Rate Optimizer. You deeply analyze ad creatives (images) and magically personalize entire landing pages to perfectly match their vibe, tone, offer, and audience.
     
-    You MUST respond with strictly formatted JSON. Do not include markdown code blocks like ```json.
+    You are given a list of text snippets extracted from a live landing page (SaaS, eCommerce, etc.) formatted as JSON elements: {"id": "...", "tag": "h1", "text": "Original text"}.
+    
+    YOUR GOAL: Rewrite ALMOST ALL the major headers (h1, h2, h3), paragraphs (p), and buttons (button, a) to seamlessly follow the design, intent, and narrative of the provided Ad Image.
+    - DO NOT BE LAZY. You must provide replacements for EVERYTHING you can to make it an entirely new, personalized experience.
+    - Be highly creative but keep the length of the new text similar to the original to prevent breaking the UI layout.
+    - Maintain the structural intent. (e.g., if it's a Call to Action button, the rewrite should also be a Call to Action).
+    
+    You MUST respond with strictly formatted JSON ONLY. Do not include markdown code blocks like ```json.
     Your JSON must have EXACTLY this structure:
     {
       "ad_brief": {
-        "detected_offer": "Summarize the discount or value prop from the image",
-        "tone": "What is the vibe?",
-        "audience": "Inferred target audience based on the ad"
+        "detected_offer": "Summarize the primary discount, feature, or value prop spotted in the image",
+        "tone": "Describe the aesthetic and tone (e.g., Aggressive, Premium, Gen Z, Edgy)",
+        "audience": "The distinct target audience based on visual cues"
       },
       "scores": {
         "original_relevance": 25,
@@ -129,9 +136,9 @@ async def personalize_landing_page(
       ],
       "changelog": [
         {
-          "element": "e.g. Main Headline",
-          "reasoning": "Why this was changed (e.g. Message Match)",
-          "confidence": "High / Medium / Low"
+          "element": "e.g. Main Hero Headline",
+          "reasoning": "Why this was radically rewritten to fit the ad",
+          "confidence": "High"
         }
       ]
     }
