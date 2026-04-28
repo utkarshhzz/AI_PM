@@ -6,6 +6,9 @@ type PersonalizeResponse = {
   status?: string;
   error?: string;
   detail?: string;
+  backend_used?: string;
+  backend_attempts?: string[];
+  failure_reasons?: string[];
   modified_html?: string;
   ai_analysis?: {
     ad_brief?: {
@@ -103,15 +106,15 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen bg-gray-50 flex flex-col p-4 dark:bg-zinc-950">
-      <div className="max-w-4xl mx-auto w-full bg-white dark:bg-zinc-900 rounded-xl shadow-lg p-8 border border-gray-100 dark:border-zinc-800 mb-8">
+    <main className="min-h-screen bg-gradient-to-b from-slate-50 via-blue-50/40 to-violet-50/40 dark:from-zinc-950 dark:via-zinc-950 dark:to-slate-950 flex flex-col p-4 md:p-8">
+      <div className="max-w-5xl mx-auto w-full bg-white/90 backdrop-blur dark:bg-zinc-900/90 rounded-2xl shadow-xl p-6 md:p-8 border border-gray-100 dark:border-zinc-800 mb-8">
         
-        <div className="flex justify-between items-start mb-8">
+        <div className="flex flex-col gap-4 md:flex-row md:justify-between md:items-start mb-8">
           <div className="text-left">
-            <h1 className="text-3xl font-extrabold text-gray-900 dark:text-white mb-2 tracking-tight">
+            <h1 className="text-3xl md:text-4xl font-extrabold text-gray-900 dark:text-white mb-2 tracking-tight">
               CRO Landing Page Personalizer
             </h1>
-            <p className="text-gray-500 dark:text-zinc-400">
+            <p className="text-gray-600 dark:text-zinc-300 max-w-2xl">
               Match page messaging to ad intent while preserving the original layout.
             </p>
             <div className="mt-3 inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 mb-4">
@@ -119,10 +122,10 @@ export default function Home() {
               Guardrail Mode: Structure-first, grounded rewriting.
             </div>
           </div>
-          <button 
+          <button
             type="button" 
             onClick={handleLoadExample}
-            className="text-sm px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-gray-700 dark:text-gray-300 font-medium rounded-lg transition-colors border border-gray-200 dark:border-zinc-700 shadow-sm"
+            className="text-sm px-4 py-2 bg-white hover:bg-gray-50 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-gray-700 dark:text-gray-300 font-medium rounded-lg transition-colors border border-gray-200 dark:border-zinc-700 shadow-sm"
           >
             Load Example Inputs
           </button>
@@ -139,7 +142,7 @@ export default function Home() {
                   id="adImage"
                   accept="image/*"
                   onChange={handleImageChange}
-                  className="w-full px-4 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all dark:bg-zinc-950 dark:text-white"
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all dark:bg-zinc-950 dark:text-white file:mr-3 file:rounded-md file:border-0 file:bg-blue-50 file:px-3 file:py-1 file:text-blue-700"
                 />
               </div>
               <div>
@@ -152,7 +155,7 @@ export default function Home() {
                   value={adLink}
                   onChange={(e) => setAdLink(e.target.value)}
                   placeholder="https://ad-campaign.example"
-                  className="w-full px-4 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all dark:bg-zinc-950 dark:text-white"
+            className="w-full px-4 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all dark:bg-zinc-950 dark:text-white"
                 />
               </div>
           </div>
@@ -198,7 +201,7 @@ export default function Home() {
             className={`w-full text-white font-bold py-3.5 px-6 rounded-xl transition-all shadow-md mt-6 flex justify-center items-center gap-2 ${
               isLoading 
                 ? "bg-blue-400 dark:bg-blue-500/50 cursor-not-allowed opacity-80" 
-                : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 hover:shadow-lg transform hover:-translate-y-0.5 active:translate-y-0"
+                : "bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 hover:from-blue-700 hover:to-violet-700 hover:shadow-lg transform hover:-translate-y-0.5 active:translate-y-0"
             }`}
           >
             {isLoading ? (
@@ -253,6 +256,11 @@ export default function Home() {
                       {response.ad_context_used?.used_ad_link ? "ad-link " : ""}
                       {response.ad_context_used?.used_ad_text ? "ad-text" : ""}
                     </p>
+                    {response.backend_used && (
+                      <p className="text-xs text-green-800/80 dark:text-green-300 mt-2">
+                        Backend: {response.backend_used}
+                      </p>
+                    )}
                 </div>
             </div>
 
@@ -282,20 +290,26 @@ export default function Home() {
           <div className="mt-8 p-4 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
             <p className="font-bold text-red-800 dark:text-red-400">⚠️ Error</p>
             <p className="text-red-700 dark:text-red-300 mt-1">{response.error || response.detail}</p>
+            {response.detail && <p className="text-red-700 dark:text-red-300 mt-2 text-sm">{response.detail}</p>}
+            {response.backend_attempts && response.backend_attempts.length > 0 && (
+              <p className="text-red-700 dark:text-red-300 mt-2 text-xs">
+                Tried: {response.backend_attempts.join(" | ")}
+              </p>
+            )}
           </div>
         )}
       </div>
 
       {/* Full Page Live Preview iframe */}
       {response && response.status === "success" && response.modified_html && (
-          <div className="w-[95%] max-w-[1400px] mx-auto h-[800px] bg-white dark:bg-zinc-900 rounded-xl shadow-[0_20px_50px_-12px_rgba(59,130,246,0.3)] border border-blue-500/20 overflow-hidden flex flex-col mt-12 mb-16 border-b-8 border-x-8 border-zinc-200 dark:border-zinc-800 transition-all duration-700 ease-out transform scale-100 opacity-100">
+          <div className="w-[95%] max-w-[1400px] mx-auto h-[820px] bg-white dark:bg-zinc-900 rounded-2xl shadow-[0_20px_50px_-12px_rgba(59,130,246,0.3)] border border-blue-500/20 overflow-hidden flex flex-col mt-12 mb-16 border-b-8 border-x-8 border-zinc-200 dark:border-zinc-800 transition-all duration-700 ease-out transform scale-100 opacity-100">
               <div className="bg-zinc-100 dark:bg-zinc-900 p-3 border-b border-zinc-200 dark:border-zinc-800 flex items-center gap-4">
                   <div className="flex gap-2">
                       <div className="w-3.5 h-3.5 rounded-full bg-red-400 hover:bg-red-500 cursor-pointer shadow-sm"></div>
                       <div className="w-3.5 h-3.5 rounded-full bg-yellow-400 hover:bg-yellow-500 cursor-pointer shadow-sm"></div>
                       <div className="w-3.5 h-3.5 rounded-full bg-green-400 hover:bg-green-500 cursor-pointer shadow-sm"></div>
                   </div>
-                  <div className="text-xs font-mono text-zinc-500 dark:text-zinc-400 bg-white dark:bg-zinc-950 px-4 py-1.5 rounded-md w-full max-w-2xl truncate shadow-sm border border-zinc-200 dark:border-zinc-800 flex items-center justify-center gap-2">
+                  <div className="text-xs font-mono text-zinc-500 dark:text-zinc-400 bg-white dark:bg-zinc-950 px-4 py-1.5 rounded-md w-full max-w-3xl truncate shadow-sm border border-zinc-200 dark:border-zinc-800 flex items-center justify-center gap-2">
                       <span>🔒</span>
                       <span className="text-green-600 dark:text-green-400">Cro-Optimized:</span> {pageUrl}
                   </div>

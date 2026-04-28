@@ -27,6 +27,9 @@ def normalize_url(url: str) -> str:
     parsed = urlparse(cleaned)
     if not parsed.scheme:
         cleaned = f"https://{cleaned}"
+    reparsed = urlparse(cleaned)
+    if reparsed.scheme not in ["http", "https"]:
+        return ""
     return cleaned
 
 def extract_offer_hint(text: str) -> str:
@@ -154,14 +157,17 @@ def keep_length_close(new_text: str, original: str, ratio: float = 1.45) -> str:
         return new_text
     return " ".join(words[:max_words]).rstrip(",. ") + "."
 
-def safe_rewrite(original: str, role: str, brief: Dict[str, str]) -> str:
+def safe_rewrite(original: str, role: str, brief: Dict[str, str], page_context: Dict[str, str]) -> str:
     offer = brief["detected_offer"]
     audience = brief["audience"]
     message = brief["message_snippet"]
     cleaned_original = original.strip()
 
     if role == "headline":
+        page_hint = page_context.get("title", "").strip()
         base = f"{message} for {audience.lower()}".strip()
+        if page_hint:
+            base = f"{base} | {page_hint}"
         candidate = base[:1].upper() + base[1:] if base else cleaned_original
         return keep_length_close(candidate, cleaned_original)
 
@@ -194,7 +200,7 @@ def safe_rewrite(original: str, role: str, brief: Dict[str, str]) -> str:
     if role == "body":
         if len(cleaned_original.split()) < 6:
             return cleaned_original
-        candidate = f"{message}. {offer.capitalize()} with clear next steps."
+        candidate = f"{message}. {offer.capitalize()} and clearer next steps."
         return keep_length_close(candidate, cleaned_original)
 
     return cleaned_original
@@ -244,6 +250,10 @@ async def personalize_landing_page(
 
     soup = scraped_data["soup"]
     extracted_texts = scraped_data["extracted_texts"]
+    page_context = {
+        "title": scraped_data.get("title", ""),
+        "meta_description": scraped_data.get("meta_description", ""),
+    }
     ad_link_summary = fetch_ad_link_summary(normalized_ad_link)
     ad_brief = build_ad_brief(ad_text or "", ad_link_summary, ad_image is not None)
 
@@ -251,7 +261,7 @@ async def personalize_landing_page(
     changelog = []
     for node in extracted_texts:
         role = role_from_tag(node["tag"], node["text"])
-        new_text = safe_rewrite(node["text"], role, ad_brief)
+        new_text = safe_rewrite(node["text"], role, ad_brief, page_context)
         if new_text and new_text != node["text"]:
             replacements.append({"id": node["id"], "original": node["text"], "new_text": new_text})
             changelog.append(
@@ -268,6 +278,9 @@ async def personalize_landing_page(
             if tag.has_attr("data-ai-id"):
                 del tag["data-ai-id"]
             tag.string = rep["new_text"]
+
+    for remaining in soup.find_all(attrs={"data-ai-id": True}):
+        del remaining["data-ai-id"]
 
     original_relevance = 45
     relevance_boost = min(45, len(replacements))
