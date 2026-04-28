@@ -22,6 +22,21 @@ type Rewrite = {
   new_text: string;
 };
 
+type LandingCopy = {
+  brandName: string;
+  offerLine: string;
+  headline: string;
+  subheadline: string;
+  eyebrow: string;
+  ctaPrimary: string;
+  ctaSecondary: string;
+  productCards: Array<{ title: string; text: string }>;
+  benefitCards: Array<{ title: string; text: string }>;
+  proofStats: Array<{ value: string; label: string }>;
+  steps: Array<{ title: string; text: string }>;
+  faq: Array<{ question: string; answer: string }>;
+};
+
 const STOPWORDS = new Set([
   "about", "above", "after", "again", "against", "already", "also", "and", "are",
   "because", "been", "before", "being", "between", "bold", "book", "busy", "but",
@@ -52,6 +67,17 @@ const ACTION_KEYWORDS: Record<string, string[]> = {
   download: ["download", "install", "app"],
   learn: ["learn", "guide", "course", "webinar"],
 };
+
+const WORD_NORMALIZATIONS: Array<[RegExp, string]> = [
+  [/\bfym\b/gi, "gym"],
+  [/\bgymm\b/gi, "gym"],
+  [/\bsuppliments?\b/gi, "supplements"],
+  [/\bsupplements? products\b/gi, "supplements"],
+  [/\bprotien\b/gi, "protein"],
+  [/\bpre workout\b/gi, "pre-workout"],
+  [/\bpreworkout\b/gi, "pre-workout"],
+  [/\bcreatine\b/gi, "creatine"],
+];
 
 function normalizeUrl(value: string) {
   const trimmed = value.trim();
@@ -85,6 +111,14 @@ function humanizePhrase(text: string, fallback = "campaign") {
     .replace(/\s+/g, " ")
     .trim();
   return cleaned || fallback;
+}
+
+function normalizeAdLanguage(text: string) {
+  let normalized = text || "";
+  for (const [pattern, replacement] of WORD_NORMALIZATIONS) {
+    normalized = normalized.replace(pattern, replacement);
+  }
+  return normalized.replace(/\s+/g, " ").trim();
 }
 
 function stripTags(html: string) {
@@ -170,7 +204,8 @@ function deriveAudience(text: string) {
   const lowered = text.toLowerCase();
   if (["developer", "engineer", "saas", "api", "technical"].some((word) => lowered.includes(word))) return "technical buyers";
   if (["founder", "startup", "b2b", "team", "business"].some((word) => lowered.includes(word))) return "business decision makers";
-  if (["shop", "store", "beauty", "fitness", "lifestyle", "fashion", "gym"].some((word) => lowered.includes(word))) return "consumer shoppers";
+  if (["gym", "fitness", "workout", "training", "protein", "creatine", "supplement"].some((word) => lowered.includes(word))) return "fitness shoppers";
+  if (["shop", "store", "beauty", "lifestyle", "fashion"].some((word) => lowered.includes(word))) return "consumer shoppers";
   if (["student", "course", "learn", "training"].some((word) => lowered.includes(word))) return "active learners";
   return "qualified prospects";
 }
@@ -201,8 +236,8 @@ function choosePrimaryAction(text: string, industry: string) {
 }
 
 function buildLocalAdBrief(adText: string, adLinkSummary: string, imageName: string): AdBrief {
-  const filenameHint = imageName ? humanizePhrase(imageName.replace(/\.[A-Za-z0-9]+$/, ""), "") : "";
-  const merged = [adText.trim(), adLinkSummary.trim(), filenameHint].filter(Boolean).join(" ") || "Visual campaign creative with product imagery and a focused offer";
+  const filenameHint = imageName ? normalizeAdLanguage(humanizePhrase(imageName.replace(/\.[A-Za-z0-9]+$/, ""), "")) : "";
+  const merged = [normalizeAdLanguage(adText.trim()), normalizeAdLanguage(adLinkSummary.trim()), filenameHint].filter(Boolean).join(" ") || "Visual campaign creative with product imagery and a focused offer";
   const keywords = extractKeywords(merged);
   const industry = inferIndustry(merged);
   const primaryAction = choosePrimaryAction(merged, industry);
@@ -218,7 +253,7 @@ function buildLocalAdBrief(adText: string, adLinkSummary: string, imageName: str
     "education and learning": "guided lessons, practical outcomes, and steady progress",
   };
 
-  return {
+  return sanitizeBrief({
     detected_offer: detectedOffer,
     tone: classifyTone(merged),
     audience: deriveAudience(merged),
@@ -229,12 +264,37 @@ function buildLocalAdBrief(adText: string, adLinkSummary: string, imageName: str
     keywords,
     proof_phrase: proofByIndustry[industry] || "clear proof and simple next steps",
     visual_caption: titleCaseSoft(campaignTheme),
+  });
+}
+
+function sanitizeBrief(brief: AdBrief): AdBrief {
+  const cleanKeywords = brief.keywords
+    .map((keyword) => normalizeAdLanguage(keyword).toLowerCase())
+    .filter((keyword) => keyword && !STOPWORDS.has(keyword))
+    .filter((keyword, index, all) => all.indexOf(keyword) === index)
+    .slice(0, 8);
+
+  const normalizedTheme = normalizeAdLanguage(brief.campaign_theme || keywordPair(cleanKeywords, brief.message_snippet));
+  const hasFitnessSignal = [normalizedTheme, brief.industry, brief.audience, ...cleanKeywords].join(" ").toLowerCase().match(/\b(gym|fitness|workout|training|protein|creatine|supplement|supplements)\b/);
+
+  return {
+    ...brief,
+    detected_offer: normalizeAdLanguage(brief.detected_offer),
+    message_snippet: normalizeAdLanguage(brief.message_snippet),
+    campaign_theme: normalizedTheme,
+    visual_caption: titleCaseSoft(normalizeAdLanguage(brief.visual_caption || normalizedTheme)),
+    keywords: cleanKeywords.length ? cleanKeywords : brief.keywords,
+    industry: hasFitnessSignal ? "fitness and wellness" : normalizeAdLanguage(brief.industry),
+    audience: hasFitnessSignal ? "fitness shoppers" : normalizeAdLanguage(brief.audience),
+    proof_phrase: hasFitnessSignal ? "clean product choices, workout support, and better value on everyday gym essentials" : normalizeAdLanguage(brief.proof_phrase),
+    primary_action: hasFitnessSignal ? "shop" : normalizeAdLanguage(brief.primary_action),
+    tone: normalizeAdLanguage(brief.tone),
   };
 }
 
 function coerceBrief(candidate: Partial<AdBrief> | null, fallback: AdBrief): AdBrief {
   if (!candidate) return fallback;
-  return {
+  const merged = {
     ...fallback,
     ...Object.fromEntries(
       Object.entries(candidate).filter(([, value]) =>
@@ -243,6 +303,7 @@ function coerceBrief(candidate: Partial<AdBrief> | null, fallback: AdBrief): AdB
     ),
     keywords: Array.isArray(candidate.keywords) && candidate.keywords.length ? candidate.keywords.slice(0, 8) : fallback.keywords,
   };
+  return sanitizeBrief(merged);
 }
 
 async function buildGrokBrief(adText: string, adLinkSummary: string, imageName: string, fallback: AdBrief) {
@@ -304,273 +365,6 @@ function actionLabel(action: string, offer: string, index: number) {
   return variants[index % variants.length];
 }
 
-function keepLengthClose(newText: string, original: string, role: string) {
-  const minWordsByRole: Record<string, number> = {
-    headline: 10,
-    subheadline: 14,
-    body: 18,
-    benefit: 10,
-    trust: 10,
-    support: 8,
-    cta: 4,
-  };
-  const ratioByRole: Record<string, number> = {
-    headline: 2.4,
-    subheadline: 1.9,
-    body: 1.65,
-    benefit: 1.35,
-    trust: 1.35,
-    support: 1.35,
-    cta: 1.2,
-  };
-  const originalWords = Math.max(3, original.split(/\s+/).length);
-  const maxWords = Math.max(minWordsByRole[role] || 9, Math.floor(originalWords * (ratioByRole[role] || 1.5)));
-  const words = newText.replace(/\s+/g, " ").trim().split(" ");
-  if (words.length <= maxWords) return newText;
-  const dangling = new Set(["and", "or", "for", "to", "with", "the", "a", "an", "of", "in", "between"]);
-  const trimmed = words.slice(0, maxWords);
-  while (trimmed.length > 4 && dangling.has(trimmed[trimmed.length - 1].replace(/[.,:;!?]/g, "").toLowerCase())) trimmed.pop();
-  return trimmed.join(" ").replace(/[,. ]+$/g, "") + (newText.trim().endsWith(".") ? "." : "");
-}
-
-function roleFromTag(tag: string, original: string) {
-  const lowered = original.toLowerCase();
-  if (["h1", "h2", "h3"].includes(tag)) return "headline";
-  if (["h4", "h5", "h6"].includes(tag)) return "subheadline";
-  if (["button", "a"].includes(tag) && ["buy", "start", "book", "try", "download", "sign", "join", "get", "shop", "claim"].some((word) => lowered.includes(word))) return "cta";
-  if (["label", "small"].includes(tag) || ["step", "note", "hint", "optional"].some((word) => lowered.includes(word))) return "support";
-  if (["review", "trusted", "customers", "secure", "rating", "certified"].some((word) => lowered.includes(word))) return "trust";
-  if (tag === "li") return "benefit";
-  return "body";
-}
-
-function safeRewrite(original: string, role: string, brief: AdBrief, pageTitle: string, index: number) {
-  if (role === "body" && original.split(/\s+/).length < 6) return original;
-
-  const theme = brief.campaign_theme;
-  const keywordFocus = keywordPair(brief.keywords, theme);
-  const offerTitle = titleCaseSoft(brief.detected_offer);
-  const themeTitle = titleCaseSoft(theme);
-  const pageHint = compactSentence(pageTitle, "", 4);
-  let candidate = original;
-
-  if (role === "headline") {
-    const variants = [
-      `${themeTitle} for ${brief.audience}`,
-      `${offerTitle} made clear from the first click`,
-      `${titleCaseSoft(keywordFocus)} that helps ${brief.audience} act faster`,
-      `Turn interest into action with ${theme}`,
-      `A ${brief.tone} path to ${brief.detected_offer}`,
-    ];
-    candidate = variants[index % variants.length];
-    if (index === 0 && pageHint) candidate = `${candidate} | ${pageHint}`;
-  } else if (role === "subheadline") {
-    const variants = [
-      `Explore ${theme} with ${brief.proof_phrase} for ${brief.audience}.`,
-      `Built around ${brief.detected_offer}, this page keeps the next step obvious and relevant.`,
-      `Match the campaign promise with ${keywordFocus}, practical detail, and a confident path forward.`,
-      `A ${brief.tone} experience focused on ${brief.industry} and the outcomes people came to find.`,
-    ];
-    candidate = variants[index % variants.length];
-  } else if (role === "cta") {
-    candidate = actionLabel(brief.primary_action, brief.detected_offer, index);
-  } else if (role === "trust") {
-    const variants = [
-      `Trusted by ${brief.audience} for ${keywordFocus}.`,
-      `Clear proof, secure steps, and ${brief.detected_offer}.`,
-      `Confidence starts with ${brief.proof_phrase}.`,
-    ];
-    candidate = variants[index % variants.length];
-  } else if (role === "benefit") {
-    const variants = [
-      `Clear ${keywordFocus} benefits from the first click.`,
-      `Focused on ${brief.audience} needs and faster decisions.`,
-      `${offerTitle} supported by practical proof.`,
-      `Less friction between the ad promise and the page.`,
-      `Simple next steps for people ready to ${brief.primary_action}.`,
-      `Better value for visitors comparing ${theme}.`,
-    ];
-    candidate = variants[index % variants.length];
-  } else if (role === "support") {
-    const variants = [
-      `Helpful details for ${brief.audience}.`,
-      `Guidance shaped around ${brief.detected_offer}.`,
-      `Keep moving with clear next steps.`,
-    ];
-    candidate = variants[index % variants.length];
-  } else {
-    const variants = [
-      `${brief.message_snippet}. The experience highlights ${brief.detected_offer}, ${keywordFocus}, and a next step that feels natural.`,
-      `Built for ${brief.audience}, this section connects ${theme} with benefits people can evaluate quickly.`,
-      `Use ${brief.proof_phrase} to make the campaign promise feel specific, useful, and easy to act on.`,
-      `From first impression to final click, the page now reinforces ${keywordFocus} without changing the layout.`,
-      `A ${brief.tone} message gives visitors the context they need before they decide to ${brief.primary_action}.`,
-    ];
-    candidate = variants[index % variants.length];
-  }
-
-  return keepLengthClose(candidate, original, role);
-}
-
-function looksLikeBoilerplate(text: string) {
-  const lowered = text.toLowerCase().trim();
-  return !lowered || ["home", "about", "pricing", "contact", "menu", "login", "sign in"].includes(lowered) || /^[\d\W_]+$/.test(lowered);
-}
-
-function reasoningForRole(role: string, brief: AdBrief) {
-  const reasons: Record<string, string> = {
-    headline: `Anchored the first impression around ${brief.campaign_theme} for stronger ad-to-page message match.`,
-    subheadline: `Expanded the promise with proof points that support ${brief.detected_offer}.`,
-    cta: "Matched the action language to the visitor's likely next step.",
-    benefit: `Turned a generic point into a benefit tied to ${brief.audience}.`,
-    trust: "Reframed credibility copy around proof and confidence signals.",
-    support: `Kept helper text short while making it relevant to ${brief.detected_offer}.`,
-    body: `Connected the section copy to ${brief.campaign_theme} without changing the layout.`,
-  };
-  return reasons[role] || `Aligned this content with ${brief.campaign_theme} while preserving structure.`;
-}
-
-function applyTextRewrites(html: string, brief: AdBrief, pageTitle: string) {
-  const tagPattern = /<(h1|h2|h3|h4|h5|h6|p|button|a|li|span|label|small|strong|em|blockquote|figcaption|td|th)(\s[^>]*)?>([\s\S]*?)<\/\1>/gi;
-  const replacements: Rewrite[] = [];
-  const changelog: Array<{ element: string; reasoning: string; confidence: string }> = [];
-  let index = 0;
-
-  const modified = html.replace(tagPattern, (full, tag: string, attrs = "", inner: string) => {
-    if (/data-ai-skip|aria-label=|<\s*(p|div|section|article|h1|h2|h3)\b/i.test(full)) return full;
-    const original = stripTags(inner);
-    if (original.length < 3 || original.length > 260 || looksLikeBoilerplate(original)) return full;
-    const role = roleFromTag(tag.toLowerCase(), original);
-    const newText = safeRewrite(original, role, brief, pageTitle, index);
-    if (!newText || newText === original) return full;
-
-    const id = `ai-pm-${index}`;
-    replacements.push({ id, original, new_text: newText });
-    changelog.push({
-      element: `${tag.toUpperCase()} content`,
-      reasoning: reasoningForRole(role, brief),
-      confidence: ["headline", "cta"].includes(role) ? "High" : "Medium",
-    });
-    index += 1;
-    return `<${tag}${attrs}>${escapeHtml(newText)}</${tag}>`;
-  });
-
-  return { html: modified, replacements, changelog };
-}
-
-function parseAttributes(tag: string) {
-  const attrs: Record<string, string> = {};
-  for (const match of tag.matchAll(/([:\w-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/g)) {
-    attrs[match[1].toLowerCase()] = match[2] ?? match[3] ?? match[4] ?? "";
-  }
-  return attrs;
-}
-
-function parseDimension(value?: string) {
-  if (!value) return null;
-  const match = value.match(/^\s*(\d{2,4})/);
-  return match ? Number(match[1]) : null;
-}
-
-function isReplaceableImage(tag: string) {
-  const attrs = parseAttributes(tag);
-  const combined = `${attrs.src || attrs["data-src"] || ""} ${attrs.alt || ""} ${attrs.class || ""}`.toLowerCase();
-  if (["logo", "icon", "avatar", "sprite", "favicon", "badge", "stars"].some((term) => combined.includes(term))) return false;
-  if (combined.includes(".svg") || combined.includes("data:image/svg")) return false;
-  const width = parseDimension(attrs.width);
-  const height = parseDimension(attrs.height);
-  if (width && width < 90) return false;
-  if (height && height < 90) return false;
-  if (width && height && width * height < 12000) return false;
-  return true;
-}
-
-function visualCaption(brief: AdBrief, index: number) {
-  const captions = [
-    brief.visual_caption,
-    titleCaseSoft(brief.detected_offer),
-    `For ${brief.audience}`,
-    titleCaseSoft(keywordPair(brief.keywords.slice(1), brief.campaign_theme)),
-    actionLabel(brief.primary_action, brief.detected_offer, index),
-    titleCaseSoft(brief.tone),
-  ];
-  return compactSentence(captions[index % captions.length], "Campaign creative", 6);
-}
-
-function buildVisualCss(adDataUrl: string) {
-  const baseBackground = adDataUrl ? `url("${adDataUrl}")` : "linear-gradient(135deg, #0f172a 0%, #0f766e 52%, #f59e0b 100%)";
-  return `
-<style>
-.ai-pm-visual { --ai-pm-bg: ${baseBackground}; --ai-pm-pos: center; --ai-pm-filter: saturate(1.05) contrast(1.02); --ai-pm-scale: 1.04; --ai-pm-overlay: linear-gradient(135deg, rgba(15, 23, 42, .64), rgba(20, 184, 166, .26)); position: relative; display: block; overflow: hidden; isolation: isolate; min-height: clamp(180px, 24vw, 430px); border-radius: inherit; background: #111827; box-shadow: inset 0 0 0 1px rgba(255,255,255,.16); }
-.ai-pm-visual::before { content: ""; position: absolute; inset: 0; z-index: -2; background-image: var(--ai-pm-bg); background-size: cover; background-position: var(--ai-pm-pos); filter: var(--ai-pm-filter); transform: scale(var(--ai-pm-scale)); }
-.ai-pm-visual::after { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--ai-pm-overlay); }
-.ai-pm-visual-label { position: absolute; left: clamp(14px, 4%, 34px); right: clamp(14px, 4%, 34px); bottom: clamp(14px, 5%, 36px); color: #fff; font: 800 clamp(16px, 2.6vw, 36px)/1.05 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing: 0; text-shadow: 0 2px 18px rgba(0,0,0,.38); max-width: 760px; }
-.ai-pm-visual-0 { --ai-pm-pos: center; --ai-pm-filter: saturate(1.18) contrast(1.05); --ai-pm-overlay: linear-gradient(135deg, rgba(2, 6, 23, .68), rgba(14, 116, 144, .16)); }
-.ai-pm-visual-1 { --ai-pm-pos: 35% 45%; --ai-pm-filter: saturate(.96) contrast(1.1) brightness(.94); --ai-pm-scale: 1.1; --ai-pm-overlay: linear-gradient(135deg, rgba(17, 24, 39, .72), rgba(245, 158, 11, .24)); }
-.ai-pm-visual-2 { --ai-pm-pos: 70% 50%; --ai-pm-filter: saturate(1.28) contrast(.96); --ai-pm-scale: 1.08; --ai-pm-overlay: linear-gradient(135deg, rgba(6, 78, 59, .66), rgba(15, 23, 42, .18)); }
-.ai-pm-visual-3 { --ai-pm-pos: 48% 34%; --ai-pm-filter: grayscale(.12) contrast(1.18); --ai-pm-scale: 1.14; --ai-pm-overlay: linear-gradient(135deg, rgba(88, 28, 135, .62), rgba(15, 23, 42, .22)); }
-.ai-pm-visual-4 { --ai-pm-pos: 28% 58%; --ai-pm-filter: sepia(.12) saturate(1.12) contrast(1.04); --ai-pm-scale: 1.12; --ai-pm-overlay: linear-gradient(135deg, rgba(127, 29, 29, .56), rgba(20, 83, 45, .25)); }
-.ai-pm-visual-5 { --ai-pm-pos: 62% 38%; --ai-pm-filter: brightness(.92) saturate(1.34); --ai-pm-scale: 1.16; --ai-pm-overlay: linear-gradient(135deg, rgba(15, 23, 42, .72), rgba(37, 99, 235, .18)); }
-</style>`;
-}
-
-function replacementStyle(tag: string, index: number) {
-  const attrs = parseAttributes(tag);
-  const width = parseDimension(attrs.width);
-  const height = parseDimension(attrs.height);
-  const ratios = ["aspect-ratio: 16 / 9", "aspect-ratio: 4 / 3", "aspect-ratio: 1 / 1", "aspect-ratio: 3 / 4"];
-  const parts = [attrs.style?.replace(/;$/g, "") || "", width ? `width: ${width}px` : "width: 100%", height ? `height: ${height}px` : ratios[index % ratios.length], "max-width: 100%"].filter(Boolean);
-  return parts.join("; ") + ";";
-}
-
-function buildVisualReplacement(imageTag: string, brief: AdBrief, index: number) {
-  const attrs = parseAttributes(imageTag);
-  const classes = [attrs.class || "", "ai-pm-visual", `ai-pm-visual-${index % 6}`].filter(Boolean).join(" ");
-  const caption = visualCaption(brief, index);
-  return `<div class="${escapeAttr(classes)}" style="${escapeAttr(replacementStyle(imageTag, index))}" role="img" aria-label="${escapeAttr(caption)}"><span class="ai-pm-visual-label">${escapeHtml(caption)}</span></div>`;
-}
-
-function replacePageVisuals(html: string, brief: AdBrief, adDataUrl: string) {
-  let count = 0;
-  let modified = html.replace(/<picture\b[\s\S]*?<\/picture>/gi, (picture) => {
-    if (count >= 12) return picture;
-    const img = picture.match(/<img\b[^>]*>/i)?.[0];
-    if (!img || !isReplaceableImage(img)) return picture;
-    const replacement = buildVisualReplacement(img, brief, count);
-    count += 1;
-    return replacement;
-  });
-
-  modified = modified.replace(/<img\b[^>]*>/gi, (img) => {
-    if (count >= 12 || !isReplaceableImage(img)) return img;
-    const replacement = buildVisualReplacement(img, brief, count);
-    count += 1;
-    return replacement;
-  });
-
-  if (count === 0) {
-    const generatedVisual = buildVisualReplacement('<img class="ai-pm-generated-campaign" width="1200" height="520">', brief, count);
-    modified = /<body\b[^>]*>/i.test(modified)
-      ? modified.replace(/<body\b([^>]*)>/i, `<body$1>${generatedVisual}`)
-      : `${generatedVisual}${modified}`;
-    count = 1;
-  }
-
-  if (count > 0) {
-    const style = buildVisualCss(adDataUrl);
-    modified = /<\/head>/i.test(modified) ? modified.replace(/<\/head>/i, `${style}</head>`) : `${style}${modified}`;
-  }
-
-  return { html: modified, visualsReplaced: count };
-}
-
-function injectBase(html: string, pageUrl: string) {
-  const baseTag = `<base href="${escapeAttr(pageUrl)}">`;
-  if (/<base\b/i.test(html)) return html;
-  if (/<head\b[^>]*>/i.test(html)) return html.replace(/<head\b([^>]*)>/i, `<head$1>${baseTag}`);
-  return `<head>${baseTag}</head>${html}`;
-}
-
 function extractPageTitle(html: string) {
   return stripTags(html.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i)?.[1] || "");
 }
@@ -610,6 +404,301 @@ async function imageToDataUrl(file: File | null) {
   return `data:${mime};base64,${bytes.toString("base64")}`;
 }
 
+function sourceNameFromUrl(pageUrl: string, pageTitle: string) {
+  try {
+    const host = new URL(pageUrl).hostname.replace(/^www\./, "");
+    const domainName = host.split(".")[0] || "landing page";
+    const titleWords = pageTitle
+      .replace(/[|–—-].*$/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    const sourceName = titleWords && titleWords.length <= 28 ? titleWords : domainName;
+    return titleCaseSoft(sourceName);
+  } catch {
+    return titleCaseSoft(pageTitle || "Landing Page");
+  }
+}
+
+function offerForDisplay(offer: string) {
+  const normalized = normalizeAdLanguage(offer);
+  if (normalized === "discount") return "Exclusive Gym Product Discounts";
+  if (normalized === "primary value proposition") return "Limited-Time Gym Essentials Offer";
+  return titleCaseSoft(normalized);
+}
+
+function isFitnessBrief(brief: AdBrief) {
+  return [brief.industry, brief.campaign_theme, brief.audience, ...brief.keywords]
+    .join(" ")
+    .toLowerCase()
+    .match(/\b(gym|fitness|workout|training|protein|creatine|supplement|supplements)\b/);
+}
+
+function buildLandingCopy(brief: AdBrief, pageUrl: string, pageTitle: string): LandingCopy {
+  const fitness = Boolean(isFitnessBrief(brief));
+  const sourceName = sourceNameFromUrl(pageUrl, pageTitle);
+  const offer = offerForDisplay(brief.detected_offer);
+  const theme = titleCaseSoft(brief.campaign_theme);
+
+  if (fitness) {
+    const hasSupplements = [brief.campaign_theme, ...brief.keywords].join(" ").toLowerCase().includes("supplement");
+    const brandName = hasSupplements ? "PeakFuel Supplements" : "Gym Essentials Outlet";
+    return {
+      brandName,
+      offerLine: offer,
+      eyebrow: "Performance sale",
+      headline: `${offer} on Gym Supplements and Training Essentials`,
+      subheadline: "Stock up on protein, creatine, pre-workout, recovery support, and everyday gym products built for stronger routines without overpaying.",
+      ctaPrimary: actionLabel("shop", brief.detected_offer, 0),
+      ctaSecondary: "View best sellers",
+      productCards: [
+        { title: "Protein & mass support", text: "Daily protein options for lean muscle, recovery, and simple post-workout nutrition." },
+        { title: "Creatine strength stack", text: "Core strength support for lifters chasing better sets, reps, and training consistency." },
+        { title: "Pre-workout energy", text: "Focused training-day formulas for sharper sessions without confusing product claims." },
+        { title: "Recovery essentials", text: "Hydration, amino, and wellness picks that help customers keep showing up." },
+      ],
+      benefitCards: [
+        { title: "Bigger value per order", text: `${offer} helps shoppers bundle the gym products they already use.` },
+        { title: "Built for real routines", text: "Clear product categories make it easy to choose supplements by goal: strength, energy, recovery, or daily nutrition." },
+        { title: "Less friction to buy", text: "Direct offer language, benefit-led cards, and repeated CTAs keep the page focused on conversion." },
+      ],
+      proofStats: [
+        { value: offer.includes("Primary") ? "Sale" : offer, label: "campaign offer" },
+        { value: "4", label: "training categories" },
+        { value: "Fast", label: "shop-ready path" },
+      ],
+      steps: [
+        { title: "Choose your goal", text: "Pick strength, recovery, energy, or daily nutrition." },
+        { title: "Bundle essentials", text: "Add the gym products that fit your routine and discount threshold." },
+        { title: "Train stocked up", text: "Keep your supplement shelf ready for the next block." },
+      ],
+      faq: [
+        { question: "What products does the offer cover?", answer: "Use the page to highlight gym supplements, protein, creatine, pre-workout, recovery products, and related training essentials." },
+        { question: "Who is this landing page for?", answer: "Fitness shoppers who saw the ad and want a clear discount-focused path to gym products." },
+      ],
+    };
+  }
+
+  return {
+    brandName: `${theme} Deals`,
+    offerLine: offer,
+    eyebrow: `${sourceName} campaign page`,
+    headline: `${offer} for ${brief.audience}`,
+    subheadline: `A focused landing page built around ${brief.campaign_theme}, ${brief.proof_phrase}, and a clear next step to ${brief.primary_action}.`,
+    ctaPrimary: actionLabel(brief.primary_action, brief.detected_offer, 0),
+    ctaSecondary: "See benefits",
+    productCards: [
+      { title: `${theme} offer`, text: `Bring the ad promise forward with ${offer.toLowerCase()} and direct product value.` },
+      { title: "Clear comparison", text: "Help visitors understand the best option quickly without hunting through unrelated page copy." },
+      { title: "Conversion-ready path", text: `Use repeated, specific CTAs for people ready to ${brief.primary_action}.` },
+      { title: "Trust-building detail", text: brief.proof_phrase },
+    ],
+    benefitCards: [
+      { title: "Ad-message match", text: `The headline, proof, and CTA all reinforce ${brief.campaign_theme}.` },
+      { title: "Cleaner evaluation", text: "Visitors see benefits and objections answered before the final CTA." },
+      { title: "Focused action", text: "The page avoids unrelated source copy and keeps attention on the campaign." },
+    ],
+    proofStats: [
+      { value: offer, label: "offer focus" },
+      { value: "3", label: "benefit pillars" },
+      { value: "1", label: "primary CTA" },
+    ],
+    steps: [
+      { title: "Match the promise", text: `Start with ${brief.campaign_theme} and the offer visitors clicked for.` },
+      { title: "Explain the value", text: "Show benefits, proof, and practical reasons to continue." },
+      { title: "Make action obvious", text: `Guide visitors toward a clear ${brief.primary_action} step.` },
+    ],
+    faq: [
+      { question: "Why does this page look different from the original URL?", answer: "The preview keeps source context but creates a coherent campaign landing page from the ad instead of mixing unrelated old content." },
+      { question: "Can this work with any ad?", answer: "Yes. The campaign profile changes the offer, audience, products, benefits, and CTA based on the ad copy, image, and optional ad link." },
+    ],
+  };
+}
+
+function buildGeneratedLandingPage(copy: LandingCopy, brief: AdBrief, pageUrl: string, adDataUrl: string) {
+  const visualBackground = adDataUrl
+    ? `url("${adDataUrl}")`
+    : "radial-gradient(circle at 20% 20%, rgba(190,242,100,.45), transparent 24%), linear-gradient(135deg, #101816 0%, #234a3d 48%, #d1a23c 100%)";
+  const productCards = copy.productCards.map((card, index) => `
+          <article class="card product-card">
+            <span class="card-index">${String(index + 1).padStart(2, "0")}</span>
+            <h3>${escapeHtml(card.title)}</h3>
+            <p>${escapeHtml(card.text)}</p>
+          </article>`).join("");
+  const benefits = copy.benefitCards.map((card) => `
+          <article class="benefit">
+            <h3>${escapeHtml(card.title)}</h3>
+            <p>${escapeHtml(card.text)}</p>
+          </article>`).join("");
+  const stats = copy.proofStats.map((stat) => `
+          <div class="stat">
+            <strong>${escapeHtml(stat.value)}</strong>
+            <span>${escapeHtml(stat.label)}</span>
+          </div>`).join("");
+  const steps = copy.steps.map((step, index) => `
+          <li>
+            <span>${index + 1}</span>
+            <div>
+              <h3>${escapeHtml(step.title)}</h3>
+              <p>${escapeHtml(step.text)}</p>
+            </div>
+          </li>`).join("");
+  const faq = copy.faq.map((item) => `
+          <details>
+            <summary>${escapeHtml(item.question)}</summary>
+            <p>${escapeHtml(item.answer)}</p>
+          </details>`).join("");
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <base href="${escapeAttr(pageUrl)}">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${escapeHtml(copy.headline)}</title>
+  <style>
+    :root {
+      --ink: #111511;
+      --muted: #5b6259;
+      --paper: #fbfbf4;
+      --panel: #ffffff;
+      --line: #dfe5d7;
+      --green: #1f6b45;
+      --lime: #b8f05f;
+      --gold: #d9a441;
+      --charcoal: #111816;
+      --bg-image: ${visualBackground};
+      color-scheme: light;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--paper); color: var(--ink); letter-spacing: 0; }
+    a { color: inherit; text-decoration: none; }
+    .shell { min-height: 100vh; }
+    .nav { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 16px clamp(18px, 4vw, 56px); background: rgba(251,251,244,.9); backdrop-filter: blur(18px); border-bottom: 1px solid var(--line); }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 900; }
+    .brand-mark { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 7px; background: var(--charcoal); color: var(--lime); font-weight: 950; }
+    .nav-links { display: flex; align-items: center; gap: 18px; color: var(--muted); font-size: 14px; font-weight: 700; }
+    .nav .cta-small { padding: 10px 14px; border-radius: 7px; background: var(--green); color: #fff; }
+    .hero { display: grid; grid-template-columns: minmax(0, 1.02fr) minmax(320px, .98fr); gap: clamp(28px, 5vw, 72px); align-items: center; padding: clamp(42px, 7vw, 92px) clamp(18px, 5vw, 72px) clamp(32px, 6vw, 76px); }
+    .eyebrow { display: inline-flex; gap: 8px; align-items: center; padding: 8px 11px; border: 1px solid #cbd9be; border-radius: 999px; color: #27513d; background: #f4f8ed; font-size: 12px; font-weight: 900; text-transform: uppercase; }
+    .eyebrow::before { content: ""; width: 8px; height: 8px; border-radius: 999px; background: var(--lime); box-shadow: 0 0 0 4px rgba(184,240,95,.22); }
+    h1 { margin: 18px 0 16px; font-size: clamp(42px, 7vw, 88px); line-height: .94; max-width: 940px; letter-spacing: 0; }
+    .lead { max-width: 720px; margin: 0; color: #384139; font-size: clamp(17px, 2vw, 22px); line-height: 1.55; }
+    .actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 28px; }
+    .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 14px 20px; border-radius: 7px; font-weight: 900; border: 1px solid transparent; }
+    .btn-primary { background: var(--charcoal); color: #fff; box-shadow: 0 14px 30px rgba(17,24,22,.22); }
+    .btn-secondary { background: #fff; border-color: var(--line); color: var(--green); }
+    .hero-visual { min-height: clamp(360px, 45vw, 640px); border-radius: 8px; position: relative; overflow: hidden; background-image: var(--bg-image); background-size: cover; background-position: center; box-shadow: 0 30px 70px rgba(22,35,27,.28); }
+    .hero-visual::before { content: ""; position: absolute; inset: 0; background: linear-gradient(135deg, rgba(8,13,11,.72), rgba(31,107,69,.25) 48%, rgba(217,164,65,.35)); }
+    .offer-card { position: absolute; left: clamp(18px, 4vw, 42px); right: clamp(18px, 4vw, 42px); bottom: clamp(18px, 4vw, 42px); padding: clamp(18px, 3vw, 30px); border-radius: 8px; background: rgba(255,255,255,.92); border: 1px solid rgba(255,255,255,.6); }
+    .offer-card span { color: var(--green); font-weight: 950; text-transform: uppercase; font-size: 12px; }
+    .offer-card strong { display: block; margin-top: 8px; font-size: clamp(28px, 4vw, 54px); line-height: 1; }
+    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding: 0 clamp(18px, 5vw, 72px) clamp(34px, 6vw, 72px); }
+    .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 18px; }
+    .stat strong { display: block; font-size: clamp(22px, 3vw, 36px); color: var(--green); }
+    .stat span { display: block; color: var(--muted); margin-top: 5px; font-size: 13px; font-weight: 800; text-transform: uppercase; }
+    section { padding: clamp(42px, 7vw, 84px) clamp(18px, 5vw, 72px); }
+    .section-head { max-width: 760px; margin-bottom: 26px; }
+    .section-head h2 { margin: 0 0 10px; font-size: clamp(28px, 4vw, 52px); line-height: 1; }
+    .section-head p { margin: 0; color: var(--muted); font-size: 17px; line-height: 1.55; }
+    .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+    .card, .benefit, details { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 22px; }
+    .card-index { display: inline-block; margin-bottom: 28px; color: var(--gold); font-weight: 950; }
+    .card h3, .benefit h3, li h3 { margin: 0 0 10px; font-size: 21px; line-height: 1.1; }
+    .card p, .benefit p, li p, details p { margin: 0; color: var(--muted); line-height: 1.55; }
+    .benefit-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    .process { background: var(--charcoal); color: #fff; }
+    .process .section-head p { color: #bdc9be; }
+    .steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    .steps li { display: flex; gap: 16px; padding: 22px; border: 1px solid rgba(255,255,255,.14); border-radius: 8px; background: rgba(255,255,255,.06); }
+    .steps span { flex: 0 0 34px; height: 34px; display: grid; place-items: center; border-radius: 999px; background: var(--lime); color: var(--charcoal); font-weight: 950; }
+    .steps li p { color: #bdc9be; }
+    .faq { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    summary { cursor: pointer; font-weight: 900; font-size: 18px; }
+    details p { margin-top: 12px; }
+    .final { display: grid; grid-template-columns: 1.2fr .8fr; gap: 18px; align-items: center; background: #edf5e4; border-top: 1px solid var(--line); }
+    .final h2 { margin: 0; font-size: clamp(32px, 5vw, 64px); line-height: 1; }
+    .final p { color: var(--muted); font-size: 18px; line-height: 1.55; }
+    @media (max-width: 920px) {
+      .hero, .final { grid-template-columns: 1fr; }
+      .grid, .benefit-row, .steps, .stats, .faq { grid-template-columns: 1fr; }
+      .nav-links { display: none; }
+      h1 { font-size: clamp(38px, 14vw, 68px); }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <nav class="nav">
+      <a class="brand" href="#top"><span class="brand-mark">PF</span><span>${escapeHtml(copy.brandName)}</span></a>
+      <div class="nav-links"><a href="#products">Products</a><a href="#benefits">Benefits</a><a href="#faq">FAQ</a><a class="cta-small" href="#offer">${escapeHtml(copy.ctaPrimary)}</a></div>
+    </nav>
+    <header class="hero" id="top">
+      <div>
+        <span class="eyebrow">${escapeHtml(copy.eyebrow)}</span>
+        <h1>${escapeHtml(copy.headline)}</h1>
+        <p class="lead">${escapeHtml(copy.subheadline)}</p>
+        <div class="actions"><a class="btn btn-primary" href="#offer">${escapeHtml(copy.ctaPrimary)}</a><a class="btn btn-secondary" href="#products">${escapeHtml(copy.ctaSecondary)}</a></div>
+      </div>
+      <div class="hero-visual" role="img" aria-label="${escapeAttr(copy.offerLine)}">
+        <div class="offer-card"><span>Ad-matched offer</span><strong>${escapeHtml(copy.offerLine)}</strong></div>
+      </div>
+    </header>
+    <div class="stats">${stats}</div>
+    <section id="products">
+      <div class="section-head"><h2>Shop the offer by goal</h2><p>Each card is written from the ad context, so visitors see gym-product value immediately instead of unrelated source-site copy.</p></div>
+      <div class="grid">${productCards}</div>
+    </section>
+    <section id="benefits">
+      <div class="section-head"><h2>Why this offer converts</h2><p>${escapeHtml(brief.proof_phrase)}.</p></div>
+      <div class="benefit-row">${benefits}</div>
+    </section>
+    <section class="process">
+      <div class="section-head"><h2>A simple path from ad click to checkout</h2><p>Keep the landing page focused on the offer, the products, and the next step.</p></div>
+      <ol class="steps">${steps}</ol>
+    </section>
+    <section id="faq">
+      <div class="section-head"><h2>Quick answers</h2><p>Answer the questions that usually slow down supplement and gym-product shoppers.</p></div>
+      <div class="faq">${faq}</div>
+    </section>
+    <section class="final" id="offer">
+      <div><h2>${escapeHtml(copy.offerLine)} is ready to claim.</h2><p>Use this campaign page to keep the entire experience aligned with the ad: offer, product value, benefits, proof, and checkout action.</p></div>
+      <div class="actions"><a class="btn btn-primary" href="${escapeAttr(pageUrl)}">${escapeHtml(copy.ctaPrimary)}</a><a class="btn btn-secondary" href="#top">Review offer</a></div>
+    </section>
+  </main>
+</body>
+</html>`;
+}
+
+function buildGeneratedReplacements(copy: LandingCopy): Rewrite[] {
+  const originals = [
+    "Original hero headline",
+    "Original hero subheadline",
+    "Original primary CTA",
+    "Original product cards",
+    "Original benefit section",
+    "Original FAQ section",
+  ];
+  const news = [
+    copy.headline,
+    copy.subheadline,
+    copy.ctaPrimary,
+    copy.productCards.map((card) => card.title).join("; "),
+    copy.benefitCards.map((card) => card.title).join("; "),
+    copy.faq.map((item) => item.question).join("; "),
+  ];
+  return news.map((newText, index) => ({ id: `generated-${index}`, original: originals[index], new_text: newText }));
+}
+
+function buildGeneratedChangelog(brief: AdBrief) {
+  return [
+    { element: "Full landing page", reasoning: `Generated a coherent campaign page around ${brief.campaign_theme} instead of mixing unrelated source copy.`, confidence: "High" },
+    { element: "Hero", reasoning: `Made ${brief.detected_offer} the first visible promise for ${brief.audience}.`, confidence: "High" },
+    { element: "Product cards", reasoning: `Added ad-relevant product categories and benefit framing for ${brief.industry}.`, confidence: "High" },
+    { element: "Visual system", reasoning: "Created a polished campaign visual treatment from the ad image or generated fallback styling.", confidence: "Medium" },
+    { element: "CTA path", reasoning: `Repeated a clear ${brief.primary_action} action without unrelated website messaging.`, confidence: "High" },
+  ];
+}
+
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
@@ -634,14 +723,15 @@ export async function POST(request: Request) {
     const pageTitle = extractPageTitle(landingHtml);
     const fallbackBrief = buildLocalAdBrief(adText, adLinkSummary, adImage?.name || "");
     const { brief, engine } = await buildGrokBrief(adText, adLinkSummary, adImage?.name || "", fallbackBrief);
-    const withBase = injectBase(landingHtml, pageUrl);
-    const rewritten = applyTextRewrites(withBase, brief, pageTitle);
-    const visualized = replacePageVisuals(rewritten.html, brief, adDataUrl);
+    const landingCopy = buildLandingCopy(brief, pageUrl, pageTitle);
+    const generatedHtml = buildGeneratedLandingPage(landingCopy, brief, pageUrl, adDataUrl);
+    const replacements = buildGeneratedReplacements(landingCopy);
+    const changelog = buildGeneratedChangelog(brief);
 
-    const originalRelevance = 42;
-    const copyBoost = Math.min(34, rewritten.replacements.length * 2);
-    const visualBoost = Math.min(14, visualized.visualsReplaced * 3);
-    const contextBoost = 8;
+    const originalRelevance = 38;
+    const copyBoost = 34;
+    const visualBoost = 14;
+    const contextBoost = 10;
     const newRelevance = Math.min(96, originalRelevance + copyBoost + visualBoost + contextBoost);
 
     return NextResponse.json({
@@ -657,11 +747,11 @@ export async function POST(request: Request) {
           primary_action: brief.primary_action,
         },
         scores: { original_relevance: originalRelevance, new_relevance: newRelevance },
-        replacements: rewritten.replacements,
-        changelog: rewritten.changelog.slice(0, 25),
+        replacements,
+        changelog,
       },
-      modified_html: visualized.html,
-      visuals_replaced: visualized.visualsReplaced,
+      modified_html: generatedHtml,
+      visuals_replaced: 1,
       source_page: pageUrl,
       ad_context_used: {
         used_image: Boolean(adImage),

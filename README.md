@@ -2,15 +2,15 @@
 
 Turn an ad creative plus an existing website URL into a campaign-matched landing page preview.
 
-The app keeps the original page structure, then rewrites eligible marketing copy and refreshes content imagery so the page feels aligned with the ad promise instead of looking like a completely different site.
+The app uses the original URL as source context, then creates a coherent campaign landing page that matches the ad promise, offer, products, benefits, visuals, and CTA.
 
 ## What It Does
 
 - Accepts ad copy, an optional ad creative image, an optional ad destination URL, and the website URL to personalize.
-- Scrapes the target page and tags eligible headings, paragraphs, CTAs, list items, and support text.
+- Fetches the target page for source context and a preview destination.
 - Builds a campaign profile from the ad inputs: offer, tone, audience, industry, action, theme, and proof angle.
-- Rewrites copy by element role so headlines, body copy, benefits, trust text, and CTAs do not repeat the same phrase everywhere.
-- Replaces non-logo content images with distinct campaign-themed visual blocks that use different crops, filters, overlays, and captions.
+- Generates a complete campaign landing page, avoiding mismatched leftover copy from unrelated source websites.
+- Rebuilds the visual system around the uploaded ad image or a polished generated campaign treatment.
 - Shows relevance lift, rewritten elements, visual updates, campaign profile, change reasoning, and a desktop/mobile iframe preview.
 
 ## Tech Stack

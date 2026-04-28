@@ -130,11 +130,11 @@ export default function Home() {
               CRO Landing Page Personalizer
             </h1>
             <p className="text-gray-600 dark:text-zinc-300 max-w-2xl">
-              Match page messaging to ad intent while preserving the original layout.
+              Turn an ad and a source URL into a focused, campaign-matched landing page.
             </p>
             <div className="mt-3 inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 mb-4">
               <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
-              Guardrail Mode: Structure-first, grounded rewriting.
+              Campaign Mode: coherent page generation from ad intent.
             </div>
             <div className="flex flex-wrap gap-2">
               <span className="text-xs px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800">
@@ -255,7 +255,7 @@ export default function Home() {
               <div className="rounded-xl border border-emerald-200/80 bg-emerald-50/80 dark:bg-emerald-900/20 dark:border-emerald-800 p-4">
                 <p className="text-xs uppercase tracking-wide text-emerald-700 dark:text-emerald-300 font-semibold">Personalized Elements</p>
                 <p className="text-3xl font-black text-emerald-700 dark:text-emerald-300 mt-1">{replacementsCount}</p>
-                <p className="text-xs text-emerald-900/70 dark:text-emerald-200/80 mt-1">Structure preserved, copy improved</p>
+                <p className="text-xs text-emerald-900/70 dark:text-emerald-200/80 mt-1">Generated as coherent landing sections</p>
               </div>
               <div className="rounded-xl border border-violet-200/80 bg-violet-50/80 dark:bg-violet-900/20 dark:border-violet-800 p-4">
                 <p className="text-xs uppercase tracking-wide text-violet-700 dark:text-violet-300 font-semibold">Backend Status</p>
@@ -270,7 +270,7 @@ export default function Home() {
                   Visuals updated: {response.visuals_replaced ?? 0}
                 </p>
                 <p className="text-xs text-amber-900/70 dark:text-amber-200/80 mt-1">
-                  Visuals are rebuilt as distinct campaign-matched blocks while preserving the page frame.
+                  Visuals are rebuilt around the ad creative and campaign offer.
                 </p>
               </div>
             </div>
