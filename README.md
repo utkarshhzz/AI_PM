@@ -2,14 +2,14 @@
 
 Turn an ad creative plus an existing website URL into a campaign-matched landing page preview.
 
-The app uses the original URL as source context, then creates a coherent campaign landing page that matches the ad promise, offer, products, benefits, visuals, and CTA.
+The app uses the original URL as source context, borrows its visual style, then creates a coherent campaign landing page that matches the ad promise, offer, products, benefits, visuals, and CTA.
 
 ## What It Does
 
 - Accepts ad copy, an optional ad creative image, an optional ad destination URL, and the website URL to personalize.
-- Fetches the target page for source context and a preview destination.
+- Fetches the target page for source context, brand/source name, and visual styling cues.
 - Builds a campaign profile from the ad inputs: offer, tone, audience, industry, action, theme, and proof angle.
-- Generates a complete campaign landing page, avoiding mismatched leftover copy from unrelated source websites.
+- Generates a complete campaign landing page that keeps a source-inspired look while avoiding mismatched leftover copy from unrelated websites.
 - Rebuilds the visual system around the uploaded ad image or a polished generated campaign treatment.
 - Shows relevance lift, rewritten elements, visual updates, campaign profile, change reasoning, and a desktop/mobile iframe preview.
 

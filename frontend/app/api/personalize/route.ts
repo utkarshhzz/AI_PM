@@ -24,6 +24,7 @@ type Rewrite = {
 
 type LandingCopy = {
   brandName: string;
+  sourceName: string;
   offerLine: string;
   headline: string;
   subheadline: string;
@@ -35,6 +36,23 @@ type LandingCopy = {
   proofStats: Array<{ value: string; label: string }>;
   steps: Array<{ title: string; text: string }>;
   faq: Array<{ question: string; answer: string }>;
+};
+
+type SourceTheme = {
+  sourceName: string;
+  brandMark: string;
+  bg: string;
+  panel: string;
+  ink: string;
+  muted: string;
+  line: string;
+  accent: string;
+  accent2: string;
+  accent3: string;
+  radius: string;
+  font: string;
+  navBg: string;
+  mode: "light" | "dark";
 };
 
 const STOPWORDS = new Set([
@@ -419,6 +437,114 @@ function sourceNameFromUrl(pageUrl: string, pageTitle: string) {
   }
 }
 
+function brandMarkFromName(name: string) {
+  const words = humanizePhrase(name, "LP").split(" ").filter(Boolean);
+  if (words.length >= 2) return `${words[0][0]}${words[1][0]}`.toUpperCase();
+  return (words[0] || "LP").slice(0, 2).toUpperCase();
+}
+
+function extractCssColors(html: string) {
+  const colors = new Set<string>();
+  for (const match of html.matchAll(/#[0-9a-fA-F]{6}\b|#[0-9a-fA-F]{3}\b/g)) {
+    colors.add(match[0]);
+    if (colors.size >= 12) break;
+  }
+  return [...colors];
+}
+
+function extractSourceTheme(html: string, pageUrl: string, pageTitle: string): SourceTheme {
+  const sourceName = sourceNameFromUrl(pageUrl, pageTitle);
+  const lower = `${pageUrl} ${pageTitle} ${html.slice(0, 5000)}`.toLowerCase();
+  const colors = extractCssColors(html);
+
+  if (lower.includes("vite")) {
+    return {
+      sourceName,
+      brandMark: brandMarkFromName(sourceName),
+      bg: "#ffffff",
+      panel: "#f6f6f7",
+      ink: "#213547",
+      muted: "#5f6f86",
+      line: "#e5e7eb",
+      accent: "#646cff",
+      accent2: "#bd34fe",
+      accent3: "#41d1ff",
+      radius: "12px",
+      font: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
+      navBg: "rgba(255,255,255,.86)",
+      mode: "light",
+    };
+  }
+
+  if (lower.includes("notion")) {
+    return {
+      sourceName,
+      brandMark: brandMarkFromName(sourceName),
+      bg: "#fbfaf8",
+      panel: "#ffffff",
+      ink: "#1f1f1f",
+      muted: "#6f6a60",
+      line: "#e7e2d8",
+      accent: "#1f1f1f",
+      accent2: "#8a6d3b",
+      accent3: "#d8c3a5",
+      radius: "6px",
+      font: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
+      navBg: "rgba(251,250,248,.9)",
+      mode: "light",
+    };
+  }
+
+  if (lower.includes("github")) {
+    return {
+      sourceName,
+      brandMark: brandMarkFromName(sourceName),
+      bg: "#0d1117",
+      panel: "#161b22",
+      ink: "#f0f6fc",
+      muted: "#8b949e",
+      line: "#30363d",
+      accent: "#2f81f7",
+      accent2: "#3fb950",
+      accent3: "#bc8cff",
+      radius: "6px",
+      font: "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Helvetica, Arial, sans-serif",
+      navBg: "rgba(13,17,23,.9)",
+      mode: "dark",
+    };
+  }
+
+  const accent = colors.find((color) => !["#fff", "#ffffff", "#000", "#000000"].includes(color.toLowerCase())) || "#2563eb";
+  return {
+    sourceName,
+    brandMark: brandMarkFromName(sourceName),
+    bg: "#ffffff",
+    panel: "#f8fafc",
+    ink: "#111827",
+    muted: "#64748b",
+    line: "#e5e7eb",
+    accent,
+    accent2: "#16a34a",
+    accent3: "#f59e0b",
+    radius: "8px",
+    font: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
+    navBg: "rgba(255,255,255,.88)",
+    mode: "light",
+  };
+}
+
+function cssAlpha(hex: string, alpha: string) {
+  const cleaned = hex.trim();
+  if (/^#[0-9a-fA-F]{3}$/.test(cleaned)) {
+    const [, r, g, b] = cleaned;
+    return `#${r}${r}${g}${g}${b}${b}${alpha}`;
+  }
+  if (/^#[0-9a-fA-F]{6}$/.test(cleaned)) {
+    return `${cleaned}${alpha}`;
+  }
+  return cleaned;
+}
+
 function offerForDisplay(offer: string) {
   const normalized = normalizeAdLanguage(offer);
   if (normalized === "discount") return "Exclusive Gym Product Discounts";
@@ -433,19 +559,19 @@ function isFitnessBrief(brief: AdBrief) {
     .match(/\b(gym|fitness|workout|training|protein|creatine|supplement|supplements)\b/);
 }
 
-function buildLandingCopy(brief: AdBrief, pageUrl: string, pageTitle: string): LandingCopy {
+function buildLandingCopy(brief: AdBrief, sourceTheme: SourceTheme): LandingCopy {
   const fitness = Boolean(isFitnessBrief(brief));
-  const sourceName = sourceNameFromUrl(pageUrl, pageTitle);
+  const sourceName = sourceTheme.sourceName;
   const offer = offerForDisplay(brief.detected_offer);
-  const theme = titleCaseSoft(brief.campaign_theme);
+  const campaignThemeTitle = titleCaseSoft(brief.campaign_theme);
 
   if (fitness) {
-    const hasSupplements = [brief.campaign_theme, ...brief.keywords].join(" ").toLowerCase().includes("supplement");
-    const brandName = hasSupplements ? "PeakFuel Supplements" : "Gym Essentials Outlet";
+    const brandName = sourceName;
     return {
       brandName,
+      sourceName,
       offerLine: offer,
-      eyebrow: "Performance sale",
+      eyebrow: `${sourceName} performance sale`,
       headline: `${offer} on Gym Supplements and Training Essentials`,
       subheadline: "Stock up on protein, creatine, pre-workout, recovery support, and everyday gym products built for stronger routines without overpaying.",
       ctaPrimary: actionLabel("shop", brief.detected_offer, 0),
@@ -479,7 +605,8 @@ function buildLandingCopy(brief: AdBrief, pageUrl: string, pageTitle: string): L
   }
 
   return {
-    brandName: `${theme} Deals`,
+    brandName: sourceName,
+    sourceName,
     offerLine: offer,
     eyebrow: `${sourceName} campaign page`,
     headline: `${offer} for ${brief.audience}`,
@@ -487,7 +614,7 @@ function buildLandingCopy(brief: AdBrief, pageUrl: string, pageTitle: string): L
     ctaPrimary: actionLabel(brief.primary_action, brief.detected_offer, 0),
     ctaSecondary: "See benefits",
     productCards: [
-      { title: `${theme} offer`, text: `Bring the ad promise forward with ${offer.toLowerCase()} and direct product value.` },
+      { title: `${campaignThemeTitle} offer`, text: `Bring the ad promise forward with ${offer.toLowerCase()} and direct product value.` },
       { title: "Clear comparison", text: "Help visitors understand the best option quickly without hunting through unrelated page copy." },
       { title: "Conversion-ready path", text: `Use repeated, specific CTAs for people ready to ${brief.primary_action}.` },
       { title: "Trust-building detail", text: brief.proof_phrase },
@@ -514,10 +641,15 @@ function buildLandingCopy(brief: AdBrief, pageUrl: string, pageTitle: string): L
   };
 }
 
-function buildGeneratedLandingPage(copy: LandingCopy, brief: AdBrief, pageUrl: string, adDataUrl: string) {
+function buildGeneratedLandingPage(copy: LandingCopy, brief: AdBrief, pageUrl: string, adDataUrl: string, sourceTheme: SourceTheme) {
+  const accentSoft = cssAlpha(sourceTheme.accent, "33");
+  const accentGlow = cssAlpha(sourceTheme.accent, "24");
+  const accentTint = cssAlpha(sourceTheme.accent, "1f");
+  const accent2Tint = cssAlpha(sourceTheme.accent2, "1c");
+  const accent3Tint = cssAlpha(sourceTheme.accent3, "66");
   const visualBackground = adDataUrl
     ? `url("${adDataUrl}")`
-    : "radial-gradient(circle at 20% 20%, rgba(190,242,100,.45), transparent 24%), linear-gradient(135deg, #101816 0%, #234a3d 48%, #d1a23c 100%)";
+    : `radial-gradient(circle at 20% 20%, ${accent3Tint}, transparent 24%), linear-gradient(135deg, ${sourceTheme.accent} 0%, ${sourceTheme.accent2} 52%, ${sourceTheme.accent3} 100%)`;
   const productCards = copy.productCards.map((card, index) => `
           <article class="card product-card">
             <span class="card-index">${String(index + 1).padStart(2, "0")}</span>
@@ -557,67 +689,75 @@ function buildGeneratedLandingPage(copy: LandingCopy, brief: AdBrief, pageUrl: s
   <title>${escapeHtml(copy.headline)}</title>
   <style>
     :root {
-      --ink: #111511;
-      --muted: #5b6259;
-      --paper: #fbfbf4;
-      --panel: #ffffff;
-      --line: #dfe5d7;
-      --green: #1f6b45;
-      --lime: #b8f05f;
-      --gold: #d9a441;
-      --charcoal: #111816;
+      --ink: ${sourceTheme.ink};
+      --muted: ${sourceTheme.muted};
+      --paper: ${sourceTheme.bg};
+      --panel: ${sourceTheme.panel};
+      --line: ${sourceTheme.line};
+      --accent: ${sourceTheme.accent};
+      --accent-2: ${sourceTheme.accent2};
+      --accent-3: ${sourceTheme.accent3};
+      --radius: ${sourceTheme.radius};
+      --nav-bg: ${sourceTheme.navBg};
+      --font: ${sourceTheme.font};
       --bg-image: ${visualBackground};
-      color-scheme: light;
+      color-scheme: ${sourceTheme.mode};
     }
     * { box-sizing: border-box; }
-    body { margin: 0; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--paper); color: var(--ink); letter-spacing: 0; }
+    body { margin: 0; font-family: var(--font); background: var(--paper); color: var(--ink); letter-spacing: 0; }
     a { color: inherit; text-decoration: none; }
-    .shell { min-height: 100vh; }
-    .nav { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 16px clamp(18px, 4vw, 56px); background: rgba(251,251,244,.9); backdrop-filter: blur(18px); border-bottom: 1px solid var(--line); }
-    .brand { display: flex; align-items: center; gap: 10px; font-weight: 900; }
-    .brand-mark { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 7px; background: var(--charcoal); color: var(--lime); font-weight: 950; }
-    .nav-links { display: flex; align-items: center; gap: 18px; color: var(--muted); font-size: 14px; font-weight: 700; }
-    .nav .cta-small { padding: 10px 14px; border-radius: 7px; background: var(--green); color: #fff; }
+    .shell { min-height: 100vh; background:
+      radial-gradient(circle at 16% 4%, ${accentTint}, transparent 28%),
+      radial-gradient(circle at 86% 14%, ${accent2Tint}, transparent 24%),
+      var(--paper);
+    }
+    .nav { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 15px clamp(18px, 4vw, 56px); background: var(--nav-bg); backdrop-filter: blur(18px); border-bottom: 1px solid var(--line); }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 850; letter-spacing: 0; }
+    .brand-mark { width: 34px; height: 34px; display: grid; place-items: center; border-radius: calc(var(--radius) * .72); background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff; font-weight: 900; box-shadow: 0 10px 26px ${accentSoft}; }
+    .source-note { color: var(--muted); font-size: 12px; font-weight: 700; margin-left: 8px; }
+    .nav-links { display: flex; align-items: center; gap: 18px; color: var(--muted); font-size: 14px; font-weight: 650; }
+    .nav .cta-small { padding: 10px 14px; border-radius: calc(var(--radius) * .75); background: var(--accent); color: #fff; font-weight: 800; }
     .hero { display: grid; grid-template-columns: minmax(0, 1.02fr) minmax(320px, .98fr); gap: clamp(28px, 5vw, 72px); align-items: center; padding: clamp(42px, 7vw, 92px) clamp(18px, 5vw, 72px) clamp(32px, 6vw, 76px); }
-    .eyebrow { display: inline-flex; gap: 8px; align-items: center; padding: 8px 11px; border: 1px solid #cbd9be; border-radius: 999px; color: #27513d; background: #f4f8ed; font-size: 12px; font-weight: 900; text-transform: uppercase; }
-    .eyebrow::before { content: ""; width: 8px; height: 8px; border-radius: 999px; background: var(--lime); box-shadow: 0 0 0 4px rgba(184,240,95,.22); }
-    h1 { margin: 18px 0 16px; font-size: clamp(42px, 7vw, 88px); line-height: .94; max-width: 940px; letter-spacing: 0; }
-    .lead { max-width: 720px; margin: 0; color: #384139; font-size: clamp(17px, 2vw, 22px); line-height: 1.55; }
+    .eyebrow { display: inline-flex; gap: 8px; align-items: center; padding: 8px 11px; border: 1px solid color-mix(in srgb, var(--accent) 34%, var(--line)); border-radius: 999px; color: var(--accent); background: color-mix(in srgb, var(--accent) 9%, transparent); font-size: 12px; font-weight: 850; text-transform: uppercase; }
+    .eyebrow::before { content: ""; width: 8px; height: 8px; border-radius: 999px; background: var(--accent-2); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent-2) 22%, transparent); }
+    h1 { margin: 18px 0 16px; font-size: clamp(42px, 7vw, 88px); line-height: .94; max-width: 940px; letter-spacing: 0; font-weight: 900; }
+    .lead { max-width: 720px; margin: 0; color: var(--muted); font-size: clamp(16px, 1.7vw, 21px); line-height: 1.58; font-weight: 450; }
     .actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 28px; }
-    .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 14px 20px; border-radius: 7px; font-weight: 900; border: 1px solid transparent; }
-    .btn-primary { background: var(--charcoal); color: #fff; box-shadow: 0 14px 30px rgba(17,24,22,.22); }
-    .btn-secondary { background: #fff; border-color: var(--line); color: var(--green); }
-    .hero-visual { min-height: clamp(360px, 45vw, 640px); border-radius: 8px; position: relative; overflow: hidden; background-image: var(--bg-image); background-size: cover; background-position: center; box-shadow: 0 30px 70px rgba(22,35,27,.28); }
-    .hero-visual::before { content: ""; position: absolute; inset: 0; background: linear-gradient(135deg, rgba(8,13,11,.72), rgba(31,107,69,.25) 48%, rgba(217,164,65,.35)); }
-    .offer-card { position: absolute; left: clamp(18px, 4vw, 42px); right: clamp(18px, 4vw, 42px); bottom: clamp(18px, 4vw, 42px); padding: clamp(18px, 3vw, 30px); border-radius: 8px; background: rgba(255,255,255,.92); border: 1px solid rgba(255,255,255,.6); }
-    .offer-card span { color: var(--green); font-weight: 950; text-transform: uppercase; font-size: 12px; }
+    .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 14px 20px; border-radius: calc(var(--radius) * .82); font-weight: 850; border: 1px solid transparent; }
+    .btn-primary { background: var(--accent); color: #fff; box-shadow: 0 14px 30px ${accentSoft}; }
+    .btn-secondary { background: var(--panel); border-color: var(--line); color: var(--accent); }
+    .hero-visual { min-height: clamp(360px, 45vw, 640px); border-radius: var(--radius); position: relative; overflow: hidden; background-image: var(--bg-image); background-size: cover; background-position: center; box-shadow: 0 30px 70px ${accentGlow}; }
+    .hero-visual::before { content: ""; position: absolute; inset: 0; background: linear-gradient(135deg, rgba(8,13,11,.7), ${sourceTheme.accent}55 48%, ${sourceTheme.accent2}4d); }
+    .offer-card { position: absolute; left: clamp(18px, 4vw, 42px); right: clamp(18px, 4vw, 42px); bottom: clamp(18px, 4vw, 42px); padding: clamp(18px, 3vw, 30px); border-radius: var(--radius); background: color-mix(in srgb, var(--panel) 92%, transparent); border: 1px solid rgba(255,255,255,.34); box-shadow: 0 22px 46px rgba(0,0,0,.18); }
+    .offer-card span { color: var(--accent); font-weight: 900; text-transform: uppercase; font-size: 12px; }
     .offer-card strong { display: block; margin-top: 8px; font-size: clamp(28px, 4vw, 54px); line-height: 1; }
     .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding: 0 clamp(18px, 5vw, 72px) clamp(34px, 6vw, 72px); }
-    .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 18px; }
-    .stat strong { display: block; font-size: clamp(22px, 3vw, 36px); color: var(--green); }
-    .stat span { display: block; color: var(--muted); margin-top: 5px; font-size: 13px; font-weight: 800; text-transform: uppercase; }
+    .stat { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; }
+    .stat strong { display: block; font-size: clamp(22px, 3vw, 36px); color: var(--accent); font-weight: 900; }
+    .stat span { display: block; color: var(--muted); margin-top: 5px; font-size: 12px; font-weight: 750; text-transform: uppercase; }
     section { padding: clamp(42px, 7vw, 84px) clamp(18px, 5vw, 72px); }
     .section-head { max-width: 760px; margin-bottom: 26px; }
-    .section-head h2 { margin: 0 0 10px; font-size: clamp(28px, 4vw, 52px); line-height: 1; }
-    .section-head p { margin: 0; color: var(--muted); font-size: 17px; line-height: 1.55; }
+    .section-head h2 { margin: 0 0 10px; font-size: clamp(28px, 4vw, 52px); line-height: 1; font-weight: 900; }
+    .section-head p { margin: 0; color: var(--muted); font-size: 16px; line-height: 1.58; font-weight: 450; }
     .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
-    .card, .benefit, details { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 22px; }
-    .card-index { display: inline-block; margin-bottom: 28px; color: var(--gold); font-weight: 950; }
-    .card h3, .benefit h3, li h3 { margin: 0 0 10px; font-size: 21px; line-height: 1.1; }
-    .card p, .benefit p, li p, details p { margin: 0; color: var(--muted); line-height: 1.55; }
+    .card, .benefit, details { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease; }
+    .card:hover, .benefit:hover { transform: translateY(-3px); border-color: color-mix(in srgb, var(--accent) 42%, var(--line)); box-shadow: 0 18px 38px ${sourceTheme.accent}18; }
+    .card-index { display: inline-block; margin-bottom: 28px; color: var(--accent-2); font-weight: 900; }
+    .card h3, .benefit h3, li h3 { margin: 0 0 10px; font-size: 21px; line-height: 1.1; font-weight: 850; }
+    .card p, .benefit p, li p, details p { margin: 0; color: var(--muted); line-height: 1.58; font-size: 15px; font-weight: 430; }
     .benefit-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
-    .process { background: var(--charcoal); color: #fff; }
-    .process .section-head p { color: #bdc9be; }
+    .process { background: linear-gradient(135deg, color-mix(in srgb, var(--ink) 94%, #000), color-mix(in srgb, var(--accent) 38%, #111)); color: #fff; }
+    .process .section-head p { color: rgba(255,255,255,.72); }
     .steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
-    .steps li { display: flex; gap: 16px; padding: 22px; border: 1px solid rgba(255,255,255,.14); border-radius: 8px; background: rgba(255,255,255,.06); }
-    .steps span { flex: 0 0 34px; height: 34px; display: grid; place-items: center; border-radius: 999px; background: var(--lime); color: var(--charcoal); font-weight: 950; }
-    .steps li p { color: #bdc9be; }
+    .steps li { display: flex; gap: 16px; padding: 22px; border: 1px solid rgba(255,255,255,.14); border-radius: var(--radius); background: rgba(255,255,255,.06); }
+    .steps span { flex: 0 0 34px; height: 34px; display: grid; place-items: center; border-radius: 999px; background: var(--accent-3); color: #111; font-weight: 900; }
+    .steps li p { color: rgba(255,255,255,.72); }
     .faq { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-    summary { cursor: pointer; font-weight: 900; font-size: 18px; }
+    summary { cursor: pointer; font-weight: 850; font-size: 18px; }
     details p { margin-top: 12px; }
-    .final { display: grid; grid-template-columns: 1.2fr .8fr; gap: 18px; align-items: center; background: #edf5e4; border-top: 1px solid var(--line); }
-    .final h2 { margin: 0; font-size: clamp(32px, 5vw, 64px); line-height: 1; }
-    .final p { color: var(--muted); font-size: 18px; line-height: 1.55; }
+    .final { display: grid; grid-template-columns: 1.2fr .8fr; gap: 18px; align-items: center; background: color-mix(in srgb, var(--accent) 9%, var(--panel)); border-top: 1px solid var(--line); }
+    .final h2 { margin: 0; font-size: clamp(32px, 5vw, 64px); line-height: 1; font-weight: 900; }
+    .final p { color: var(--muted); font-size: 17px; line-height: 1.58; }
     @media (max-width: 920px) {
       .hero, .final { grid-template-columns: 1fr; }
       .grid, .benefit-row, .steps, .stats, .faq { grid-template-columns: 1fr; }
@@ -629,7 +769,7 @@ function buildGeneratedLandingPage(copy: LandingCopy, brief: AdBrief, pageUrl: s
 <body>
   <main class="shell">
     <nav class="nav">
-      <a class="brand" href="#top"><span class="brand-mark">PF</span><span>${escapeHtml(copy.brandName)}</span></a>
+      <a class="brand" href="#top"><span class="brand-mark">${escapeHtml(sourceTheme.brandMark)}</span><span>${escapeHtml(copy.brandName)}</span><span class="source-note">ad-matched</span></a>
       <div class="nav-links"><a href="#products">Products</a><a href="#benefits">Benefits</a><a href="#faq">FAQ</a><a class="cta-small" href="#offer">${escapeHtml(copy.ctaPrimary)}</a></div>
     </nav>
     <header class="hero" id="top">
@@ -721,10 +861,11 @@ export async function POST(request: Request) {
     ]);
 
     const pageTitle = extractPageTitle(landingHtml);
+    const sourceTheme = extractSourceTheme(landingHtml, pageUrl, pageTitle);
     const fallbackBrief = buildLocalAdBrief(adText, adLinkSummary, adImage?.name || "");
     const { brief, engine } = await buildGrokBrief(adText, adLinkSummary, adImage?.name || "", fallbackBrief);
-    const landingCopy = buildLandingCopy(brief, pageUrl, pageTitle);
-    const generatedHtml = buildGeneratedLandingPage(landingCopy, brief, pageUrl, adDataUrl);
+    const landingCopy = buildLandingCopy(brief, sourceTheme);
+    const generatedHtml = buildGeneratedLandingPage(landingCopy, brief, pageUrl, adDataUrl, sourceTheme);
     const replacements = buildGeneratedReplacements(landingCopy);
     const changelog = buildGeneratedChangelog(brief);
 
