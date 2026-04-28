@@ -45,6 +45,7 @@ export default function Home() {
   const [response, setResponse] = useState<PersonalizeResponse | null>(null);
   const [formError, setFormError] = useState("");
   const [previewMode, setPreviewMode] = useState<"desktop" | "mobile">("desktop");
+  const [copyStatus, setCopyStatus] = useState<"" | "copied">("");
 
   const handleLoadExample = () => {
     setPageUrl("https://www.notion.com/product");
@@ -110,6 +111,32 @@ export default function Home() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleCopySummary = async () => {
+    if (!response?.ai_analysis) return;
+    const summary = [
+      `Offer: ${response.ai_analysis.ad_brief?.detected_offer || "N/A"}`,
+      `Audience: ${response.ai_analysis.ad_brief?.audience || "N/A"}`,
+      `Tone: ${response.ai_analysis.ad_brief?.tone || "N/A"}`,
+      `Relevance: ${response.ai_analysis.scores?.original_relevance ?? 0} -> ${response.ai_analysis.scores?.new_relevance ?? 0}`,
+      `Replacements: ${response.ai_analysis.replacements?.length || 0}`,
+      `Visuals updated: ${response.visuals_replaced ?? 0}`,
+    ].join("\n");
+    await navigator.clipboard.writeText(summary);
+    setCopyStatus("copied");
+    setTimeout(() => setCopyStatus(""), 1600);
+  };
+
+  const handleDownloadHtml = () => {
+    if (!response?.modified_html) return;
+    const blob = new Blob([response.modified_html], { type: "text/html;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "personalized-landing-page.html";
+    anchor.click();
+    URL.revokeObjectURL(url);
   };
 
   const replacementsCount = response?.ai_analysis?.replacements?.length || 0;
@@ -260,10 +287,31 @@ export default function Home() {
               </>
             ) : "Generate Personalized Landing Page"}
           </button>
+          {isLoading && (
+            <div className="rounded-lg border border-blue-200 bg-blue-50 text-blue-700 px-4 py-3 text-sm animate-pulse-soft">
+              Running extraction, message-match rewrite, CTA optimization, and visual alignment...
+            </div>
+          )}
         </form>
 
         {response && response.status === "success" && (
-          <div className="mt-8 space-y-6 animate-fade-in transition-all">
+          <div className="mt-8 space-y-6 animate-fade-up transition-all">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={handleCopySummary}
+                className="text-xs px-3 py-1.5 rounded-md border border-gray-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 hover:bg-gray-50 dark:hover:bg-zinc-700"
+              >
+                {copyStatus === "copied" ? "Summary Copied" : "Copy CRO Summary"}
+              </button>
+              <button
+                type="button"
+                onClick={handleDownloadHtml}
+                className="text-xs px-3 py-1.5 rounded-md border border-gray-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 hover:bg-gray-50 dark:hover:bg-zinc-700"
+              >
+                Download Personalized HTML
+              </button>
+            </div>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               <div className="rounded-xl border border-blue-200/80 bg-blue-50/80 dark:bg-blue-900/20 dark:border-blue-800 p-4">
                 <p className="text-xs uppercase tracking-wide text-blue-700 dark:text-blue-300 font-semibold">Relevance Lift</p>
@@ -357,6 +405,20 @@ export default function Home() {
                     )}
                   </div>
                 </div>
+                <div className="mt-4 rounded-lg border border-green-200 dark:border-green-800 bg-white/70 dark:bg-zinc-900/60 p-4">
+                  <p className="text-xs uppercase tracking-wide text-green-700 dark:text-green-300 font-semibold">Before vs After Snapshot</p>
+                  <div className="mt-2 space-y-2 max-h-[140px] overflow-y-auto">
+                    {response.ai_analysis?.replacements?.slice(0, 2).map((item) => (
+                      <div key={`diff-${item.id}`} className="text-xs text-gray-700 dark:text-zinc-300">
+                        <p className="line-through text-red-600/80 dark:text-red-300/80">{item.original}</p>
+                        <p className="text-green-700 dark:text-green-300 mt-1">{item.new_text}</p>
+                      </div>
+                    ))}
+                    {!response.ai_analysis?.replacements?.length && (
+                      <p className="text-xs text-gray-500 dark:text-zinc-400">No before/after samples available.</p>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -394,7 +456,7 @@ export default function Home() {
       </div>
 
       {response && response.status === "success" && response.modified_html && (
-        <div className={`mx-auto ${previewMode === "desktop" ? "w-[95%] max-w-[1400px]" : "w-[390px] max-w-[95%]"} h-[820px] bg-white dark:bg-zinc-900 rounded-2xl shadow-[0_20px_50px_-12px_rgba(59,130,246,0.3)] border border-blue-500/20 overflow-hidden flex flex-col mt-12 mb-16 border-b-8 border-x-8 border-zinc-200 dark:border-zinc-800 transition-all duration-500 ease-out`}>
+        <div className={`mx-auto animate-fade-up ${previewMode === "desktop" ? "w-[95%] max-w-[1400px]" : "w-[390px] max-w-[95%]"} h-[820px] bg-white dark:bg-zinc-900 rounded-2xl shadow-[0_20px_50px_-12px_rgba(59,130,246,0.3)] border border-blue-500/20 overflow-hidden flex flex-col mt-12 mb-16 border-b-8 border-x-8 border-zinc-200 dark:border-zinc-800 transition-all duration-500 ease-out`}>
           <div className="bg-zinc-100/90 dark:bg-zinc-900 p-3 border-b border-zinc-200 dark:border-zinc-800 flex items-center gap-4">
             <div className="flex gap-2">
               <div className="w-3.5 h-3.5 rounded-full bg-red-400 hover:bg-red-500 cursor-pointer shadow-sm"></div>
