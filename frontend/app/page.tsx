@@ -16,6 +16,9 @@ type PersonalizeResponse = {
       detected_offer?: string;
       tone?: string;
       audience?: string;
+      industry?: string;
+      campaign_theme?: string;
+      primary_action?: string;
     };
     scores?: {
       original_relevance?: number;
@@ -41,10 +44,10 @@ export default function Home() {
   const [formError, setFormError] = useState("");
   const [previewMode, setPreviewMode] = useState<"desktop" | "mobile">("desktop");
 
-  const handleLoadExample = async () => {
-    setPageUrl("https://github.com");
-    setAdText("Build faster with one secure platform for your team.");
-    setAdLink("https://github.com/features");
+  const handleLoadExample = () => {
+    setPageUrl("https://www.notion.com/product");
+    setAdText("Launch week offer: build a calm team workspace, plan projects faster, and keep notes, docs, and tasks in one place.");
+    setAdLink("https://www.notion.com/product");
   };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -111,10 +114,16 @@ export default function Home() {
   const scoreBefore = response?.ai_analysis?.scores?.original_relevance ?? 0;
   const scoreAfter = response?.ai_analysis?.scores?.new_relevance ?? 0;
   const scoreDelta = Math.max(0, scoreAfter - scoreBefore);
+  const adBrief = response?.ai_analysis?.ad_brief;
+  const inputsUsed = [
+    response?.ad_context_used?.used_image ? "image" : "",
+    response?.ad_context_used?.used_ad_link ? "ad link" : "",
+    response?.ad_context_used?.used_ad_text ? "ad copy" : "",
+  ].filter(Boolean);
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-slate-50 via-blue-50/40 to-violet-50/40 dark:from-zinc-950 dark:via-zinc-950 dark:to-slate-950 flex flex-col p-4 md:p-8">
-      <div className="max-w-6xl mx-auto w-full bg-white/90 backdrop-blur dark:bg-zinc-900/90 rounded-2xl shadow-xl p-6 md:p-8 border border-gray-100 dark:border-zinc-800 mb-8">
+    <main className="min-h-screen bg-[#f6f7f3] dark:bg-zinc-950 flex flex-col p-4 md:p-8">
+      <div className="max-w-6xl mx-auto w-full bg-white/95 backdrop-blur dark:bg-zinc-900/95 rounded-lg shadow-sm p-6 md:p-8 border border-gray-200 dark:border-zinc-800 mb-8">
         <div className="flex flex-col gap-4 md:flex-row md:justify-between md:items-start mb-8">
           <div className="text-left">
             <h1 className="text-3xl md:text-4xl font-extrabold text-gray-900 dark:text-white mb-2 tracking-tight">
@@ -218,7 +227,7 @@ export default function Home() {
             className={`w-full text-white font-bold py-3.5 px-6 rounded-xl transition-all shadow-md mt-6 flex justify-center items-center gap-2 ${
               isLoading
                 ? "bg-blue-400 dark:bg-blue-500/50 cursor-not-allowed opacity-80"
-                : "bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 hover:from-blue-700 hover:to-violet-700 hover:shadow-lg transform hover:-translate-y-0.5 active:translate-y-0"
+                : "bg-zinc-900 hover:bg-zinc-800 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200 hover:shadow-lg transform hover:-translate-y-0.5 active:translate-y-0"
             }`}
           >
             {isLoading ? (
@@ -261,27 +270,37 @@ export default function Home() {
                   Images updated: {response.visuals_replaced ?? 0}
                 </p>
                 <p className="text-xs text-amber-900/70 dark:text-amber-200/80 mt-1">
-                  Upload an ad image to transform page visuals while preserving layout structure.
+                  Visuals are rebuilt as distinct campaign-matched blocks while preserving the page frame.
                 </p>
               </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className="bg-blue-50 dark:bg-blue-900/20 p-6 rounded-xl border border-blue-100 dark:border-blue-800">
-                <h2 className="text-xl font-bold text-blue-900 dark:text-blue-400 mb-4">Ad Brief and Match Signal</h2>
+                <h2 className="text-xl font-bold text-blue-900 dark:text-blue-400 mb-4">Campaign Profile</h2>
                 <div className="space-y-4">
                   <div>
-                    <p className="text-sm font-semibold text-blue-800 dark:text-blue-300">Detected Offer / CTA</p>
-                    <p className="text-gray-800 dark:text-gray-200 mt-1">{response.ai_analysis?.ad_brief?.detected_offer || "N/A"}</p>
+                    <p className="text-sm font-semibold text-blue-800 dark:text-blue-300">Theme</p>
+                    <p className="text-gray-800 dark:text-gray-200 mt-1">{adBrief?.campaign_theme || "N/A"}</p>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm font-semibold text-blue-800 dark:text-blue-300">Offer</p>
+                      <p className="text-gray-800 dark:text-gray-200 mt-1">{adBrief?.detected_offer || "N/A"}</p>
+                    </div>
                     <div>
                       <p className="text-sm font-semibold text-blue-800 dark:text-blue-300">Brand Tone</p>
-                      <p className="text-gray-800 dark:text-gray-200 mt-1">{response.ai_analysis?.ad_brief?.tone || "N/A"}</p>
+                      <p className="text-gray-800 dark:text-gray-200 mt-1">{adBrief?.tone || "N/A"}</p>
                     </div>
                     <div>
                       <p className="text-sm font-semibold text-blue-800 dark:text-blue-300">Target Audience</p>
-                      <p className="text-gray-800 dark:text-gray-200 mt-1">{response.ai_analysis?.ad_brief?.audience || "N/A"}</p>
+                      <p className="text-gray-800 dark:text-gray-200 mt-1">{adBrief?.audience || "N/A"}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-blue-800 dark:text-blue-300">Industry / Action</p>
+                      <p className="text-gray-800 dark:text-gray-200 mt-1">
+                        {[adBrief?.industry, adBrief?.primary_action].filter(Boolean).join(" / ") || "N/A"}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -290,9 +309,7 @@ export default function Home() {
               <div className="bg-green-50 dark:bg-green-900/20 p-6 rounded-xl border border-green-100 dark:border-green-800">
                 <h2 className="text-xl font-bold text-green-900 dark:text-green-400 mb-2">Execution Details</h2>
                 <p className="text-green-900/80 dark:text-green-200/80 text-sm">
-                  Inputs used: {response.ad_context_used?.used_image ? "image " : ""}
-                  {response.ad_context_used?.used_ad_link ? "ad-link " : ""}
-                  {response.ad_context_used?.used_ad_text ? "ad-text" : "none"}
+                  Inputs used: {inputsUsed.length ? inputsUsed.join(", ") : "none"}
                 </p>
                 <div className="mt-4 rounded-lg border border-green-200 dark:border-green-800 bg-white/70 dark:bg-zinc-900/60 p-4">
                   <p className="text-xs uppercase tracking-wide text-green-700 dark:text-green-300 font-semibold">Top rewrites</p>
@@ -331,7 +348,7 @@ export default function Home() {
 
         {response && (response.status === "error" || response.error || response.detail) && (
           <div className="mt-8 p-4 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
-            <p className="font-bold text-red-800 dark:text-red-400">⚠️ Error</p>
+            <p className="font-bold text-red-800 dark:text-red-400">Error</p>
             <p className="text-red-700 dark:text-red-300 mt-1">{response.error || response.detail}</p>
             {response.detail && <p className="text-red-700 dark:text-red-300 mt-2 text-sm">{response.detail}</p>}
             {response.backend_attempts && response.backend_attempts.length > 0 && (
@@ -352,7 +369,7 @@ export default function Home() {
               <div className="w-3.5 h-3.5 rounded-full bg-green-400 hover:bg-green-500 cursor-pointer shadow-sm"></div>
             </div>
             <div className="text-xs font-mono text-zinc-500 dark:text-zinc-400 bg-white dark:bg-zinc-950 px-4 py-1.5 rounded-md w-full truncate shadow-sm border border-zinc-200 dark:border-zinc-800 flex items-center justify-center gap-2">
-              <span>🔒</span>
+              <span className="text-zinc-400">Secure preview</span>
               <span className="text-green-600 dark:text-green-400">CRO-Optimized:</span> {pageUrl}
             </div>
             <div className="flex items-center gap-2">
