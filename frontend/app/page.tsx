@@ -18,6 +18,8 @@ type PersonalizeResponse = {
       audience?: string;
       industry?: string;
       campaign_theme?: string;
+      campaign_brand?: string;
+      product_category?: string;
       primary_action?: string;
     };
     scores?: {
@@ -285,6 +287,16 @@ export default function Home() {
                   <div>
                     <p className="text-sm font-semibold text-blue-800 dark:text-blue-300">Theme</p>
                     <p className="text-gray-800 dark:text-gray-200 mt-1">{adBrief?.campaign_theme || "N/A"}</p>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm font-semibold text-blue-800 dark:text-blue-300">Detected Brand</p>
+                      <p className="text-gray-800 dark:text-gray-200 mt-1">{adBrief?.campaign_brand || "N/A"}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-blue-800 dark:text-blue-300">Product Category</p>
+                      <p className="text-gray-800 dark:text-gray-200 mt-1">{adBrief?.product_category || "N/A"}</p>
+                    </div>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>

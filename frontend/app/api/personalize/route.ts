@@ -9,6 +9,8 @@ type AdBrief = {
   audience: string;
   message_snippet: string;
   campaign_theme: string;
+  campaign_brand: string;
+  product_category: string;
   industry: string;
   primary_action: string;
   keywords: string[];
@@ -31,6 +33,15 @@ type LandingCopy = {
   eyebrow: string;
   ctaPrimary: string;
   ctaSecondary: string;
+  productSectionTitle: string;
+  productSectionIntro: string;
+  benefitSectionTitle: string;
+  processSectionTitle: string;
+  processSectionIntro: string;
+  reviewSectionTitle: string;
+  reviewSectionIntro: string;
+  faqSectionIntro: string;
+  finalCtaText: string;
   productCards: Array<{ title: string; text: string }>;
   benefitCards: Array<{ title: string; text: string }>;
   proofStats: Array<{ value: string; label: string }>;
@@ -98,6 +109,19 @@ const WORD_NORMALIZATIONS: Array<[RegExp, string]> = [
   [/\bpre workout\b/gi, "pre-workout"],
   [/\bpreworkout\b/gi, "pre-workout"],
   [/\bcreatine\b/gi, "creatine"],
+];
+
+const BRAND_PATTERNS: Array<[RegExp, string]> = [
+  [/\bnike\b/i, "Nike"],
+  [/\bjordan\b/i, "Jordan"],
+  [/\badidas\b/i, "Adidas"],
+  [/\bpuma\b/i, "Puma"],
+  [/\breebok\b/i, "Reebok"],
+  [/\bnew balance\b/i, "New Balance"],
+  [/\bASICS\b/i, "ASICS"],
+  [/\bunder armour\b/i, "Under Armour"],
+  [/\bconverse\b/i, "Converse"],
+  [/\bvans\b/i, "Vans"],
 ];
 
 function normalizeUrl(value: string) {
@@ -198,6 +222,8 @@ function extractOfferHint(text: string) {
     /\b\d{1,3}%\s*off\b/,
     /\b\d{1,3}\s*percent\s*(?:off|of)\b/,
     /\b\$?\d+(?:\.\d{2})?\s*(?:off|discount|credit|bonus)\b/,
+    /\bdiscount\s+on\s+[a-z0-9\s-]{3,60}\b/,
+    /\bdeal\s+on\s+[a-z0-9\s-]{3,60}\b/,
     /\bfree\s+(?:trial|shipping|consultation|demo|download|delivery)\b/,
     /\blimited\s+time\b/,
     /\bearly\s+access\b/,
@@ -210,6 +236,24 @@ function extractOfferHint(text: string) {
     if (match) return humanizePhrase(match[0], "primary offer");
   }
   return "primary value proposition";
+}
+
+function detectCampaignBrand(text: string) {
+  for (const [pattern, brand] of BRAND_PATTERNS) {
+    if (pattern.test(text)) return brand;
+  }
+  return "";
+}
+
+function detectProductCategory(text: string) {
+  const lowered = text.toLowerCase();
+  if (/\b(shoe|shoes|sneaker|sneakers|trainer|trainers|kicks|jordan|air max|running shoes)\b/.test(lowered)) return "footwear";
+  if (/\b(gym|fitness|workout|training|protein|creatine|pre-workout|supplement|supplements)\b/.test(lowered)) return "fitness";
+  if (/\b(hoodie|shirt|apparel|fashion|style|wear|clothing)\b/.test(lowered)) return "apparel";
+  if (/\b(beauty|skin|serum|cosmetic)\b/.test(lowered)) return "beauty";
+  if (/\b(course|class|lesson|learn|academy)\b/.test(lowered)) return "education";
+  if (/\b(software|platform|saas|app|workflow|automation)\b/.test(lowered)) return "software";
+  return "campaign";
 }
 
 function classifyTone(text: string) {
@@ -225,6 +269,7 @@ function deriveAudience(text: string) {
   const lowered = text.toLowerCase();
   if (["developer", "engineer", "saas", "api", "technical"].some((word) => lowered.includes(word))) return "technical buyers";
   if (["founder", "startup", "b2b", "team", "business"].some((word) => lowered.includes(word))) return "business decision makers";
+  if (["sneaker", "sneakers", "shoe", "shoes", "trainer", "kicks", "jordan", "air max"].some((word) => lowered.includes(word))) return "sneaker shoppers";
   if (["gym", "fitness", "workout", "training", "protein", "creatine", "supplement"].some((word) => lowered.includes(word))) return "fitness shoppers";
   if (["shop", "store", "beauty", "lifestyle", "fashion"].some((word) => lowered.includes(word))) return "consumer shoppers";
   if (["student", "course", "learn", "training"].some((word) => lowered.includes(word))) return "active learners";
@@ -263,6 +308,8 @@ function buildLocalAdBrief(adText: string, adLinkSummary: string, imageName: str
   const industry = inferIndustry(merged);
   const primaryAction = choosePrimaryAction(merged, industry);
   const detectedOffer = extractOfferHint(merged);
+  const campaignBrand = detectCampaignBrand(merged);
+  const productCategory = detectProductCategory(merged);
   const campaignTheme = keywordPair(keywords, compactSentence(merged, "clear value for your audience"));
   const proofByIndustry: Record<string, string> = {
     "SaaS and software": "secure workflows, faster setup, and team-ready control",
@@ -276,6 +323,8 @@ function buildLocalAdBrief(adText: string, adLinkSummary: string, imageName: str
 
   return sanitizeBrief({
     detected_offer: detectedOffer,
+    campaign_brand: campaignBrand,
+    product_category: productCategory,
     tone: classifyTone(merged),
     audience: deriveAudience(merged),
     message_snippet: compactSentence(merged, "clear value for your audience"),
@@ -296,19 +345,30 @@ function sanitizeBrief(brief: AdBrief): AdBrief {
     .slice(0, 8);
 
   const normalizedTheme = normalizeAdLanguage(brief.campaign_theme || keywordPair(cleanKeywords, brief.message_snippet));
-  const hasFitnessSignal = [normalizedTheme, brief.industry, brief.audience, ...cleanKeywords].join(" ").toLowerCase().match(/\b(gym|fitness|workout|training|protein|creatine|supplement|supplements)\b/);
+  const signalText = [normalizedTheme, brief.industry, brief.audience, brief.campaign_brand, brief.product_category, ...cleanKeywords].join(" ").toLowerCase();
+  const detectedBrand = normalizeAdLanguage(brief.campaign_brand || detectCampaignBrand(signalText));
+  const detectedCategory = normalizeAdLanguage(brief.product_category || detectProductCategory(signalText));
+  const hasFootwearSignal = /\b(footwear|sneaker|sneakers|shoe|shoes|trainer|trainers|kicks|jordan|air max)\b/.test(signalText);
+  const hasFitnessSignal = !hasFootwearSignal && /\b(gym|fitness|workout|training|protein|creatine|supplement|supplements)\b/.test(signalText);
+  const footwearTheme = detectedBrand ? `${detectedBrand} sneakers` : "sneakers and shoes";
 
   return {
     ...brief,
     detected_offer: normalizeAdLanguage(brief.detected_offer),
+    campaign_brand: detectedBrand,
+    product_category: hasFootwearSignal ? "footwear" : hasFitnessSignal ? "fitness" : detectedCategory,
     message_snippet: normalizeAdLanguage(brief.message_snippet),
-    campaign_theme: normalizedTheme,
-    visual_caption: titleCaseSoft(normalizeAdLanguage(brief.visual_caption || normalizedTheme)),
+    campaign_theme: hasFootwearSignal ? footwearTheme : normalizedTheme,
+    visual_caption: titleCaseSoft(normalizeAdLanguage(brief.visual_caption || (hasFootwearSignal ? footwearTheme : normalizedTheme))),
     keywords: cleanKeywords.length ? cleanKeywords : brief.keywords,
-    industry: hasFitnessSignal ? "fitness and wellness" : normalizeAdLanguage(brief.industry),
-    audience: hasFitnessSignal ? "fitness shoppers" : normalizeAdLanguage(brief.audience),
-    proof_phrase: hasFitnessSignal ? "clean product choices, workout support, and better value on everyday gym essentials" : normalizeAdLanguage(brief.proof_phrase),
-    primary_action: hasFitnessSignal ? "shop" : normalizeAdLanguage(brief.primary_action),
+    industry: hasFootwearSignal ? "fashion and lifestyle" : hasFitnessSignal ? "fitness and wellness" : normalizeAdLanguage(brief.industry),
+    audience: hasFootwearSignal ? "sneaker shoppers" : hasFitnessSignal ? "fitness shoppers" : normalizeAdLanguage(brief.audience),
+    proof_phrase: hasFootwearSignal
+      ? "fresh styles, easy fit comparison, product confidence, and clear savings on the pairs shoppers want"
+      : hasFitnessSignal
+        ? "clean product choices, workout support, and better value on everyday gym essentials"
+        : normalizeAdLanguage(brief.proof_phrase),
+    primary_action: hasFootwearSignal || hasFitnessSignal ? "shop" : normalizeAdLanguage(brief.primary_action),
     tone: normalizeAdLanguage(brief.tone),
   };
 }
@@ -355,7 +415,7 @@ async function buildGrokBrief(adText: string, adLinkSummary: string, imageName: 
               ad_text: adText,
               ad_link_summary: adLinkSummary,
               image_filename: imageName,
-              required_keys: ["detected_offer", "tone", "audience", "campaign_theme", "industry", "primary_action", "keywords", "proof_phrase", "visual_caption"],
+              required_keys: ["detected_offer", "tone", "audience", "campaign_theme", "campaign_brand", "product_category", "industry", "primary_action", "keywords", "proof_phrase", "visual_caption"],
             }),
           },
         ],
@@ -430,7 +490,7 @@ function sourceNameFromUrl(pageUrl: string, pageTitle: string) {
     const host = new URL(pageUrl).hostname.replace(/^www\./, "");
     const domainName = host.split(".")[0] || "landing page";
     const titleWords = pageTitle
-      .replace(/[|–—-].*$/g, "")
+      .replace(/[|\u2013\u2014-].*$/g, "")
       .replace(/\s+/g, " ")
       .trim();
     const sourceName = titleWords && titleWords.length <= 28 ? titleWords : domainName;
@@ -550,8 +610,8 @@ function cssAlpha(hex: string, alpha: string) {
 
 function offerForDisplay(offer: string) {
   const normalized = normalizeAdLanguage(offer);
-  if (normalized === "discount") return "Exclusive Gym Product Discounts";
-  if (normalized === "primary value proposition") return "Limited-Time Gym Essentials Offer";
+  if (normalized === "discount") return "Limited-Time Discount";
+  if (normalized === "primary value proposition") return "Limited-Time Offer";
   return titleCaseSoft(normalized);
 }
 
@@ -562,14 +622,93 @@ function isFitnessBrief(brief: AdBrief) {
     .match(/\b(gym|fitness|workout|training|protein|creatine|supplement|supplements)\b/);
 }
 
+function isFootwearBrief(brief: AdBrief) {
+  return [brief.product_category, brief.industry, brief.campaign_theme, brief.audience, brief.campaign_brand, ...brief.keywords]
+    .join(" ")
+    .toLowerCase()
+    .match(/\b(footwear|sneaker|sneakers|shoe|shoes|trainer|trainers|kicks|jordan|air max)\b/);
+}
+
 function buildLandingCopy(brief: AdBrief, sourceTheme: SourceTheme): LandingCopy {
+  const footwear = Boolean(isFootwearBrief(brief));
   const fitness = Boolean(isFitnessBrief(brief));
   const sourceName = sourceTheme.sourceName;
+  const campaignBrand = brief.campaign_brand || sourceName;
   const offer = offerForDisplay(brief.detected_offer);
   const campaignThemeTitle = titleCaseSoft(brief.campaign_theme);
 
+  if (footwear) {
+    const offerLine = ["Discount", "Limited-Time Discount", "Limited-Time Offer", "Primary Value Proposition"].includes(offer)
+      ? `${campaignBrand} Sneaker Deals`
+      : offer;
+    const footwearHeadline = /\b(shoe|shoes|sneaker|sneakers|trainer|trainers|kicks)\b/i.test(offerLine)
+      ? `${offerLine}, Styled for Every Step`
+      : `${offerLine} for Shoes, Sneakers, and Everyday Style`;
+    return {
+      brandName: `${campaignBrand} Drop`,
+      sourceName,
+      offerLine,
+      eyebrow: `${sourceName} inspired sneaker offer`,
+      headline: footwearHeadline,
+      subheadline: `Build a sharper sneaker rotation with standout ${campaignBrand} pairs, easy style guidance, comfort-led details, and a clear path to claim the offer.`,
+      ctaPrimary: actionLabel("shop", brief.detected_offer, 0),
+      ctaSecondary: "Explore sneaker picks",
+      productSectionTitle: "Shop the sneaker edit",
+      productSectionIntro: "Every section is built from the ad context, so visitors see shoes, sneaker styles, savings, and product confidence without unrelated page copy.",
+      benefitSectionTitle: "Why sneaker shoppers stay engaged",
+      processSectionTitle: "From ad click to sneaker checkout",
+      processSectionIntro: "Keep the page focused on the pair, the style reason, the offer, and the checkout action.",
+      reviewSectionTitle: "Sneaker reviews that support the offer",
+      reviewSectionIntro: "Social proof helps the page feel like a complete shopping experience instead of a single promo block.",
+      faqSectionIntro: "Answer sizing, style, offer, and buying questions before shoppers leave the page.",
+      finalCtaText: `Keep the experience aligned with the ad: ${campaignBrand} sneaker value, product confidence, style proof, and a clear shopping action.`,
+      productCards: [
+        { title: "Everyday sneakers", text: "Clean daily pairs for work, campus, errands, and weekend outfits." },
+        { title: "Statement colorways", text: "Hero styles and standout colors that make the offer feel fresh and worth clicking." },
+        { title: "Comfort-led picks", text: "Soft cushioning, easy wear, and versatile silhouettes for long days on foot." },
+        { title: "Limited-time deals", text: `${offerLine} keeps the value visible while shoppers compare their favorite pairs.` },
+      ],
+      benefitCards: [
+        { title: "Style-first value", text: "The page leads with sneaker looks, not generic ecommerce copy." },
+        { title: "Better product confidence", text: "Cards explain use cases, comfort, and style so shoppers know what to pick." },
+        { title: "Offer stays visible", text: `${offerLine} appears in the hero, product edit, reviews, and final CTA.` },
+      ],
+      proofStats: [
+        { value: offerLine, label: "campaign offer" },
+        { value: "4", label: "sneaker categories" },
+        { value: "Fast", label: "shop-ready flow" },
+      ],
+      steps: [
+        { title: "Pick your style", text: "Choose everyday, statement, comfort, or deal-focused pairs." },
+        { title: "Compare the details", text: "See fit, use case, and value cues without digging through a full catalog." },
+        { title: "Claim the pair", text: "Move from ad promise to checkout with one clear shopping path." },
+      ],
+      reviews: [
+        { quote: "The page felt like a sneaker drop, not a generic sale. I could see the style and offer right away.", name: "Riya M.", detail: "Sneaker shopper" },
+        { quote: "The product cards made it easy to decide between daily wear and bolder colorways.", name: "Kabir S.", detail: "Nike shoe buyer" },
+        { quote: "The discount stayed clear without overpowering the shoes. That made the page feel premium.", name: "Anika P.", detail: "Fashion retail customer" },
+      ],
+      trustItems: [
+        { title: "Source-inspired look", text: `The page keeps visual cues from ${sourceName} while changing the content to the sneaker ad.` },
+        { title: "Ad-to-product match", text: `The copy reinforces ${campaignBrand} shoes, sneakers, and the offer throughout.` },
+        { title: "Review-ready proof", text: "Placeholder reviews make the design feel complete and can be replaced with real customer quotes." },
+      ],
+      faq: [
+        { question: "What should this sneaker page promote?", answer: `${campaignBrand} shoes, sneakers, standout colorways, comfort-led pairs, and the ad's discount or offer.` },
+        { question: "Why does it still resemble the reference site?", answer: `The layout borrows ${sourceName}'s style cues while replacing the message, products, and CTA with the sneaker campaign.` },
+        { question: "Can the reviews be real?", answer: "Yes. The review cards are polished placeholders that should be replaced with real customer proof when available." },
+      ],
+      footerLinks: [
+        { label: "Sneaker edit", href: "#products" },
+        { label: "Benefits", href: "#benefits" },
+        { label: "Reviews", href: "#reviews" },
+        { label: "FAQ", href: "#faq" },
+      ],
+    };
+  }
+
   if (fitness) {
-    const brandName = sourceName;
+    const brandName = campaignBrand || sourceName;
     return {
       brandName,
       sourceName,
@@ -579,6 +718,15 @@ function buildLandingCopy(brief: AdBrief, sourceTheme: SourceTheme): LandingCopy
       subheadline: "Stock up on protein, creatine, pre-workout, recovery support, and everyday gym products built for stronger routines without overpaying.",
       ctaPrimary: actionLabel("shop", brief.detected_offer, 0),
       ctaSecondary: "View best sellers",
+      productSectionTitle: "Shop by training goal",
+      productSectionIntro: "Every product card is written for the fitness ad, so shoppers see supplements, training essentials, value, and clear buying reasons.",
+      benefitSectionTitle: "Why fitness shoppers convert",
+      processSectionTitle: "From ad click to stocked shelf",
+      processSectionIntro: "Keep the page focused on the workout goal, the right product group, the offer, and the checkout action.",
+      reviewSectionTitle: "Customer reviews that support the offer",
+      reviewSectionIntro: "Social proof makes the supplement offer feel practical, trusted, and easier to act on.",
+      faqSectionIntro: "Answer product, bundle, discount, and routine questions before shoppers leave the page.",
+      finalCtaText: "Keep the experience aligned with the ad: gym-product value, product confidence, benefit proof, and one clear shopping action.",
       productCards: [
         { title: "Protein & mass support", text: "Daily protein options for lean muscle, recovery, and simple post-workout nutrition." },
         { title: "Creatine strength stack", text: "Core strength support for lifters chasing better sets, reps, and training consistency." },
@@ -625,7 +773,7 @@ function buildLandingCopy(brief: AdBrief, sourceTheme: SourceTheme): LandingCopy
   }
 
   return {
-    brandName: sourceName,
+    brandName: campaignBrand,
     sourceName,
     offerLine: offer,
     eyebrow: `${sourceName} campaign page`,
@@ -633,6 +781,15 @@ function buildLandingCopy(brief: AdBrief, sourceTheme: SourceTheme): LandingCopy
     subheadline: `A focused landing page built around ${brief.campaign_theme}, ${brief.proof_phrase}, and a clear next step to ${brief.primary_action}.`,
     ctaPrimary: actionLabel(brief.primary_action, brief.detected_offer, 0),
     ctaSecondary: "See benefits",
+    productSectionTitle: "Explore the campaign offer",
+    productSectionIntro: `Each card connects the ad promise to ${brief.campaign_theme}, so visitors get relevant details instead of leftover source-site copy.`,
+    benefitSectionTitle: "Why this offer converts",
+    processSectionTitle: "From ad click to next step",
+    processSectionIntro: `Keep the page focused on the promise, the value, and the path to ${brief.primary_action}.`,
+    reviewSectionTitle: "Proof that supports the offer",
+    reviewSectionIntro: "Social proof makes the landing page feel complete and gives visitors another reason to trust the campaign.",
+    faqSectionIntro: "Answer the questions that usually slow down high-intent visitors before they take action.",
+    finalCtaText: `Keep the entire experience aligned with the ad: ${brief.campaign_theme}, relevant proof, benefits, and a clear ${brief.primary_action} action.`,
     productCards: [
       { title: `${campaignThemeTitle} offer`, text: `Bring the ad promise forward with ${offer.toLowerCase()} and direct product value.` },
       { title: "Clear comparison", text: "Help visitors understand the best option quickly without hunting through unrelated page copy." },
@@ -689,6 +846,7 @@ function buildGeneratedLandingPage(copy: LandingCopy, brief: AdBrief, pageUrl: s
     : `radial-gradient(circle at 20% 20%, ${accent3Tint}, transparent 24%), linear-gradient(135deg, ${sourceTheme.accent} 0%, ${sourceTheme.accent2} 52%, ${sourceTheme.accent3} 100%)`;
   const productCards = copy.productCards.map((card, index) => `
           <article class="card product-card">
+            <div class="product-visual visual-${index % 4}" aria-hidden="true"><span>${escapeHtml(card.title)}</span></div>
             <span class="card-index">${String(index + 1).padStart(2, "0")}</span>
             <h3>${escapeHtml(card.title)}</h3>
             <p>${escapeHtml(card.text)}</p>
@@ -718,7 +876,7 @@ function buildGeneratedLandingPage(copy: LandingCopy, brief: AdBrief, pageUrl: s
           </details>`).join("");
   const reviews = copy.reviews.map((review) => `
           <article class="review-card">
-            <div class="stars" aria-label="5 out of 5 stars">★★★★★</div>
+            <div class="stars" aria-label="5 out of 5 stars">&#9733;&#9733;&#9733;&#9733;&#9733;</div>
             <blockquote>${escapeHtml(review.quote)}</blockquote>
             <footer><strong>${escapeHtml(review.name)}</strong><span>${escapeHtml(review.detail)}</span></footer>
           </article>`).join("");
@@ -791,6 +949,15 @@ function buildGeneratedLandingPage(copy: LandingCopy, brief: AdBrief, pageUrl: s
     .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
     .card, .benefit, details { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease; }
     .card:hover, .benefit:hover { transform: translateY(-3px); border-color: color-mix(in srgb, var(--accent) 42%, var(--line)); box-shadow: 0 18px 38px ${sourceTheme.accent}18; }
+    .product-card { display: flex; flex-direction: column; min-height: 360px; }
+    .product-visual { position: relative; height: 152px; margin: -6px -6px 20px; overflow: hidden; border-radius: calc(var(--radius) * .78); background-image: var(--bg-image); background-size: cover; background-position: center; border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--line)); }
+    .product-visual::before { content: ""; position: absolute; inset: 0; background: linear-gradient(135deg, rgba(0,0,0,.18), color-mix(in srgb, var(--accent) 28%, transparent)); }
+    .product-visual::after { content: ""; position: absolute; width: 86px; height: 86px; right: 16px; bottom: 14px; border-radius: 999px; border: 18px solid color-mix(in srgb, var(--accent-3) 78%, transparent); opacity: .86; }
+    .product-visual span { position: absolute; left: 14px; bottom: 14px; max-width: calc(100% - 32px); color: #fff; font-weight: 900; font-size: 13px; line-height: 1.2; text-transform: uppercase; text-shadow: 0 2px 16px rgba(0,0,0,.4); }
+    .visual-0 { background-position: 50% 42%; }
+    .visual-1 { background-position: 18% 58%; filter: saturate(1.08); }
+    .visual-2 { background-position: 82% 46%; filter: contrast(1.06); }
+    .visual-3 { background-position: 48% 78%; filter: saturate(.94) contrast(1.08); }
     .card-index { display: inline-block; margin-bottom: 28px; color: var(--accent-2); font-weight: 900; }
     .card h3, .benefit h3, li h3 { margin: 0 0 10px; font-size: 21px; line-height: 1.1; font-weight: 850; }
     .card p, .benefit p, li p, details p { margin: 0; color: var(--muted); line-height: 1.58; font-size: 15px; font-weight: 430; }
@@ -853,15 +1020,15 @@ function buildGeneratedLandingPage(copy: LandingCopy, brief: AdBrief, pageUrl: s
     </header>
     <div class="stats">${stats}</div>
     <section id="products">
-      <div class="section-head"><h2>Shop the offer by goal</h2><p>Each card is written from the ad context, so visitors see gym-product value immediately instead of unrelated source-site copy.</p></div>
+      <div class="section-head"><h2>${escapeHtml(copy.productSectionTitle)}</h2><p>${escapeHtml(copy.productSectionIntro)}</p></div>
       <div class="grid">${productCards}</div>
     </section>
     <section id="benefits">
-      <div class="section-head"><h2>Why this offer converts</h2><p>${escapeHtml(brief.proof_phrase)}.</p></div>
+      <div class="section-head"><h2>${escapeHtml(copy.benefitSectionTitle)}</h2><p>${escapeHtml(brief.proof_phrase)}.</p></div>
       <div class="benefit-row">${benefits}</div>
     </section>
     <section class="process">
-      <div class="section-head"><h2>A simple path from ad click to checkout</h2><p>Keep the landing page focused on the offer, the products, and the next step.</p></div>
+      <div class="section-head"><h2>${escapeHtml(copy.processSectionTitle)}</h2><p>${escapeHtml(copy.processSectionIntro)}</p></div>
       <ol class="steps">${steps}</ol>
     </section>
     <section id="reviews">
@@ -872,18 +1039,18 @@ function buildGeneratedLandingPage(copy: LandingCopy, brief: AdBrief, pageUrl: s
           <p>Use these cards as polished placeholders, then swap in real testimonials when the business has them.</p>
         </div>
         <div>
-          <div class="section-head"><h2>Customer reviews that support the offer</h2><p>Social proof helps the page feel complete and gives visitors another reason to trust the campaign.</p></div>
+          <div class="section-head"><h2>${escapeHtml(copy.reviewSectionTitle)}</h2><p>${escapeHtml(copy.reviewSectionIntro)}</p></div>
           <div class="reviews">${reviews}</div>
         </div>
       </div>
     </section>
     <div class="trust-strip">${trustItems}</div>
     <section id="faq">
-      <div class="section-head"><h2>Quick answers</h2><p>Answer the questions that usually slow down supplement and gym-product shoppers.</p></div>
+      <div class="section-head"><h2>Quick answers</h2><p>${escapeHtml(copy.faqSectionIntro)}</p></div>
       <div class="faq">${faq}</div>
     </section>
     <section class="final" id="offer">
-      <div><h2>${escapeHtml(copy.offerLine)} is ready to claim.</h2><p>Use this campaign page to keep the entire experience aligned with the ad: offer, product value, benefits, proof, and checkout action.</p></div>
+      <div><h2>${escapeHtml(copy.offerLine)} is ready to claim.</h2><p>${escapeHtml(copy.finalCtaText)}</p></div>
       <div class="actions"><a class="btn btn-primary" href="${escapeAttr(pageUrl)}">${escapeHtml(copy.ctaPrimary)}</a><a class="btn btn-secondary" href="#top">Review offer</a></div>
     </section>
     <footer class="site-footer">
@@ -983,6 +1150,8 @@ export async function POST(request: Request) {
           audience: brief.audience,
           industry: brief.industry,
           campaign_theme: brief.campaign_theme,
+          campaign_brand: brief.campaign_brand,
+          product_category: brief.product_category,
           primary_action: brief.primary_action,
         },
         scores: { original_relevance: originalRelevance, new_relevance: newRelevance },
